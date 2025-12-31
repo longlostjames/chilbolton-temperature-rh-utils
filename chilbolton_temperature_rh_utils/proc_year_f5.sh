@@ -52,8 +52,7 @@ while [ "$current_date" -le "$end_date" ]; do
     corr_file_rh="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/rhnew_ch.corr"
 
     # Run the Python script
-    python ~/git/ncas-temperature-rh-1-software/process_hmp155_f5.py "$infile" \
-               -m "$mfile" -o "$outdir"
+    process-hmp155-f5 "$infile" -m "$mfile" -o "$outdir"
 
         # Path to the generated NetCDF file
     ncfile="$outdir/ncas-temperature-rh-1_cao_${current_date}_surface-met_v1.0.nc"
@@ -62,10 +61,10 @@ while [ "$current_date" -le "$end_date" ]; do
     if [ -f "$ncfile" ]; then
         if [ -z "$previous_ncfile" ]; then
             # No previous file for the first day
-            python ~/git/ncas-temperature-rh-1-software/flag_purge_times.py -f "$ncfile" --corr_file_temperature "$corr_file_oat" --corr_file_rh "$corr_file_rh"
+            flag-hmp155-purge-times "$ncfile" --corr-file-temperature "$corr_file_oat" --corr-file-rh "$corr_file_rh"
         else
             # Use the previous day's file for consistency checks
-            python ~/git/ncas-temperature-rh-1-software/flag_purge_times.py -f "$ncfile" -p "$previous_ncfile"  --corr_file_temperature "$corr_file_oat" --corr_file_rh "$corr_file_rh"
+            flag-hmp155-purge-times "$ncfile" --previous-file "$previous_ncfile" --corr-file-temperature "$corr_file_oat" --corr-file-rh "$corr_file_rh"
         fi
         # Update the previous file to the current file
         previous_ncfile="$ncfile"

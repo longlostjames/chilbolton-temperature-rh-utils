@@ -47,8 +47,7 @@ while [ "$current_date" -le "$end_date" ]; do
     mfile="/home/users/cjwalden/git/ncas-temperature-rh-1-software/metadata_stfc.json"
 
     # Generate NetCDF file
-    python ~/git/ncas-temperature-rh-1-software/process_hmp155_stfc.py "$infile" \
-               -m "$mfile" -o "$outdir"
+    process-hmp155-stfc "$infile" -m "$mfile" -o "$outdir"
 
     # Path to the generated NetCDF file
     ncfile="$outdir/stfc-temperature-rh-1_cao_${current_date}_surface-met_v1.0.nc"
@@ -57,10 +56,10 @@ while [ "$current_date" -le "$end_date" ]; do
     if [ -f "$ncfile" ]; then
         if [ -z "$previous_ncfile" ]; then
             # No previous file for the first day
-            python ~/git/ncas-temperature-rh-1-software/flag_purge_times.py -f "$ncfile"
+            flag-hmp155-purge-times "$ncfile"
         else
             # Use the previous day's file for consistency checks
-            python ~/git/ncas-temperature-rh-1-software/flag_purge_times.py -f "$ncfile" -p "$previous_ncfile"
+            flag-hmp155-purge-times "$ncfile" --previous-file "$previous_ncfile"
         fi
         # Update the previous file to the current file
         previous_ncfile="$ncfile"
