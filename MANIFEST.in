@@ -1,0 +1,19 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include *.sh
+
+recursive-include chilbolton_temperature_rh_utils *.py
+recursive-include chilbolton_temperature_rh_utils *.json
+recursive-include chilbolton_temperature_rh_utils *.chdb
+recursive-include chilbolton_temperature_rh_utils *.sh
+
+recursive-include docs *.rst
+recursive-include docs *.py
+recursive-include docs *.md
+recursive-include docs Makefile
+recursive-include docs make.bat
+
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store

@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chilbolton-temperature-rh-utils"
+version = "1.0.0"
+description = "Processing utilities for Chilbolton temperature and relative humidity sensor data"
+readme = "README.md"
+authors = [
+    {name = "NCAS"},
+]
+maintainers = [
+    {name = "NCAS"},
+]
+license = {text = "MIT"}
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24.0",
+    "polars>=0.19.0",
+    "pandas>=2.0.0",
+    "xarray>=2023.1.0",
+    "netCDF4>=1.6.0",
+    "matplotlib>=3.7.0",
+    "cftime>=1.6.0",
+    "ncas-amof-netcdf-template>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "mypy>=1.0",
+]
+docs = [
+    "sphinx>=4.0",
+    "sphinx_rtd_theme>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/longlostjames/chilbolton-temperature-rh-utils"
+Documentation = "https://chilbolton-temperature-rh-utils.readthedocs.io"
+Repository = "https://github.com/longlostjames/chilbolton-temperature-rh-utils"
+Issues = "https://github.com/longlostjames/chilbolton-temperature-rh-utils/issues"
+
+[project.scripts]
+process-hmp155 = "chilbolton_temperature_rh_utils.process_hmp155:main"
+process-hmp155-f5 = "chilbolton_temperature_rh_utils.process_hmp155_f5:main"
+process-hmp155-stfc = "chilbolton_temperature_rh_utils.process_hmp155_stfc:main"
+flag-purge-times = "chilbolton_temperature_rh_utils.flag_purge_times:main"
+manual-flag-purge-times = "chilbolton_temperature_rh_utils.manual_flag_purge_times:main"
+flag-low-temperature = "chilbolton_temperature_rh_utils.flag_low_temperature:main"
+find-purge-shift = "chilbolton_temperature_rh_utils.find_purge_shift:main"
+count-purge-flags = "chilbolton_temperature_rh_utils.count_purge_flags:main"
+
+[tool.setuptools]
+packages = ["chilbolton_temperature_rh_utils"]
+
+[tool.setuptools.package-data]
+chilbolton_temperature_rh_utils = ["*.json", "*.chdb", "*.sh"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

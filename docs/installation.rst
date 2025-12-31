@@ -13,6 +13,55 @@ This software requires Python 3.11 or later. The following Python packages are r
 * matplotlib
 * numpy
 * cftime
+* ncas-amof-netcdf-template
+
+Installation Methods
+--------------------
+
+The package can be installed using pip in several ways.
+
+From PyPI (Recommended)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Once published, install the latest stable version:
+
+.. code-block:: bash
+
+   pip install chilbolton-temperature-rh-utils
+
+From Source (Development)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For development or to use the latest version:
+
+.. code-block:: bash
+
+   git clone https://github.com/longlostjames/chilbolton-temperature-rh-utils.git
+   cd chilbolton-temperature-rh-utils
+   pip install -e .
+
+The ``-e`` flag installs in "editable" mode, so changes to the code are immediately available.
+
+With Optional Dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Install with development tools:
+
+.. code-block:: bash
+
+   pip install -e ".[dev]"
+
+Install with documentation tools:
+
+.. code-block:: bash
+
+   pip install -e ".[docs]"
+
+Install with all optional dependencies:
+
+.. code-block:: bash
+
+   pip install -e ".[dev,docs]"
 
 Setting Up the Environment
 ---------------------------
@@ -27,23 +76,46 @@ Create and activate a new conda environment:
    conda create -n cao_3_11 python=3.11
    conda activate cao_3_11
 
-Install required packages:
+Install the package:
 
 .. code-block:: bash
 
-   conda install -c conda-forge xarray netCDF4 polars pandas matplotlib numpy cftime
-
-Installing the Software
-------------------------
-
-Clone the repository:
-
-.. code-block:: bash
-
-   git clone https://github.com/longlostjames/chilbolton-temperature-rh-utils.git
    cd chilbolton-temperature-rh-utils
+   pip install -e .
 
-The software is currently a collection of Python scripts rather than an installable package. Simply ensure the required dependencies are installed and run the scripts directly.
+Using Virtual Environment
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Alternatively, use Python's built-in venv:
+
+.. code-block:: bash
+
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -e .
+
+Command-Line Tools
+------------------
+
+After installation, the following command-line tools are available:
+
+.. code-block:: bash
+
+   process-hmp155          # Process CR1000X data
+   process-hmp155-f5       # Process Format5 data
+   process-hmp155-stfc     # Process STFC variant
+   flag-purge-times        # Automated purge flagging
+   manual-flag-purge-times # Manual purge flagging
+   flag-low-temperature    # Flag low temperatures
+   find-purge-shift        # Calculate purge time shifts
+   count-purge-flags       # Count purge flags
+
+Verify the installation:
+
+.. code-block:: bash
+
+   process-hmp155 --help
+   process-hmp155-f5 --help
 
 File System Setup
 -----------------
