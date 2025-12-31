@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
 """Process a full year of HMP155 data from CR1000X format."""
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
 
 def main():
     """Execute the proc_year.sh bash script."""
+    parser = argparse.ArgumentParser(
+        description="Process a full year of HMP155 data from CR1000X format.",
+        epilog="""This command processes an entire year of Vaisala HMP155 temperature and 
+relative humidity data from Campbell Scientific CR1000X datalogger format (TOA5) 
+to CF-compliant NetCDF files with automated QC flagging."""
+    )
+    parser.add_argument("-y", "--year", required=True, type=int,
+                        help="Year to process (e.g., 2024)")
+    
+    args = parser.parse_args()
+    
     # Get the directory where this Python file is located
     script_dir = Path(__file__).parent
     bash_script = script_dir / "proc_year.sh"
@@ -15,10 +27,10 @@ def main():
         print(f"Error: Script not found at {bash_script}", file=sys.stderr)
         sys.exit(1)
     
-    # Execute the bash script, passing all command-line arguments
+    # Execute the bash script with the year argument
     try:
         result = subprocess.run(
-            ["bash", str(bash_script)] + sys.argv[1:],
+            ["bash", str(bash_script), "-y", str(args.year)],
             check=False
         )
         sys.exit(result.returncode)
