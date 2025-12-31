@@ -6,9 +6,9 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'NCAS Temperature RH-1 Software'
-copyright = '2025, NCAS'
-author = 'NCAS'
+project = 'Chilbolton Temperature RH Utils Software'
+copyright = '2025, UKRI'
+author = 'Chris Walden'
 release = '1.0.0'
 
 # -- General configuration ---------------------------------------------------
