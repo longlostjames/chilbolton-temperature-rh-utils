@@ -136,14 +136,14 @@ After installation, the following command-line tools are available:
 
 .. code-block:: bash
 
-   process-hmp155          # Process CR1000X data
-   process-hmp155-f5       # Process Format5 data
-   process-hmp155-stfc     # Process STFC variant
-   flag-purge-times        # Automated purge flagging
-   manual-flag-purge-times # Manual purge flagging
-   flag-low-temperature    # Flag low temperatures
-   find-purge-shift        # Calculate purge time shifts
-   count-purge-flags       # Count purge flags
+   process-hmp155                  # Process CR1000X data
+   process-hmp155-f5               # Process Format5 data
+   process-hmp155-stfc             # Process STFC variant
+   flag-hmp155-purge-times         # Automated purge flagging
+   flag-hmp155-purge-times-manual  # Manual purge flagging
+   flag-hmp155-low-temperature     # Flag low temperatures
+   find-hmp155-purge-shift         # Calculate purge time shifts
+   count-hmp155-purge-flags        # Count purge flags
 
 Verify the installation:
 
@@ -151,6 +151,7 @@ Verify the installation:
 
    process-hmp155 --help
    process-hmp155-f5 --help
+   flag-hmp155-purge-times --help
 
 File System Setup
 -----------------

@@ -129,7 +129,7 @@ pip show chilbolton-temperature-rh-utils
 # Test command-line tools
 process-hmp155 --help
 process-hmp155-f5 --help
-flag-purge-times --help
+flag-hmp155-purge-times --help
 
 # Test Python imports
 python -c "import chilbolton_temperature_rh_utils; print(chilbolton_temperature_rh_utils.__version__)"
@@ -189,6 +189,9 @@ which process-hmp155
 
 # If not found, add to PATH or use full path
 python -m chilbolton_temperature_rh_utils.process_hmp155 --help
+
+# Other commands
+which flag-hmp155-purge-times
 ```
 
 ### Dependency Conflicts

@@ -58,11 +58,11 @@ Issues = "https://github.com/longlostjames/chilbolton-temperature-rh-utils/issue
 process-hmp155 = "chilbolton_temperature_rh_utils.process_hmp155:main"
 process-hmp155-f5 = "chilbolton_temperature_rh_utils.process_hmp155_f5:main"
 process-hmp155-stfc = "chilbolton_temperature_rh_utils.process_hmp155_stfc:main"
-flag-purge-times = "chilbolton_temperature_rh_utils.flag_purge_times:main"
-manual-flag-purge-times = "chilbolton_temperature_rh_utils.manual_flag_purge_times:main"
-flag-low-temperature = "chilbolton_temperature_rh_utils.flag_low_temperature:main"
-find-purge-shift = "chilbolton_temperature_rh_utils.find_purge_shift:main"
-count-purge-flags = "chilbolton_temperature_rh_utils.count_purge_flags:main"
+flag-hmp155-purge-times = "chilbolton_temperature_rh_utils.flag_purge_times:main"
+flag-hmp155-purge-times-manual = "chilbolton_temperature_rh_utils.manual_flag_purge_times:main"
+flag-hmp155-low-temperature = "chilbolton_temperature_rh_utils.flag_low_temperature:main"
+find-hmp155-purge-shift = "chilbolton_temperature_rh_utils.find_purge_shift:main"
+count-hmp155-purge-flags = "chilbolton_temperature_rh_utils.count_purge_flags:main"
 
 [tool.setuptools]
 packages = ["chilbolton_temperature_rh_utils"]

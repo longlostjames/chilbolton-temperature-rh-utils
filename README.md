@@ -76,13 +76,13 @@ process-hmp155 input_data.dat -m metadata.json -o output_dir/
 process-hmp155-f5 chan241231.000 -m metadata_f5.json -o output_dir/
 
 # Flag purge cycles
-flag-purge-times -f data.nc -p previous_day.nc
+flag-hmp155-purge-times -f data.nc -p previous_day.nc
 
 # Manual purge flagging
-manual-flag-purge-times -f data.nc --prev-file yesterday.nc
+flag-hmp155-purge-times-manual -f data.nc --prev-file yesterday.nc
 
 # Flag low temperatures
-flag-low-temperature -f data.nc --threshold 245
+flag-hmp155-low-temperature -f data.nc --threshold 245
 ```
 
 ### Python API
