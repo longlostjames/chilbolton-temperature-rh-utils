@@ -13,6 +13,11 @@ import argparse
 import cftime
 from datetime import timezone
 
+try:
+    from . import __version__
+except ImportError:
+    __version__ = "unknown"
+
 DATE_REGEX = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{6}" 
 d = re.compile(DATE_REGEX)
 
@@ -160,6 +165,9 @@ def main(infile, outdir="./", metadata_file="metadata.json", aws_7_file=None):
 
     # Add metadata from file
     nant.util.add_metadata_to_netcdf(nc, metadata_file)
+    
+    # Set processing software version from package
+    nc.setncattr("processing_software_version", __version__)
 
         # Ensure the 'time' variable has the correct units and values
     if "time" in nc.variables:
