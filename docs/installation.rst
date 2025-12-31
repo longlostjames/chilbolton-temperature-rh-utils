@@ -40,8 +40,8 @@ Clone the repository:
 
 .. code-block:: bash
 
-   git clone <repository-url> ncas-temperature-rh-1-software
-   cd ncas-temperature-rh-1-software
+   git clone https://github.com/longlostjames/chilbolton-temperature-rh-utils.git
+   cd chilbolton-temperature-rh-utils
 
 The software is currently a collection of Python scripts rather than an installable package. Simply ensure the required dependencies are installed and run the scripts directly.
 

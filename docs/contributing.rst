@@ -14,14 +14,14 @@ Fork and Clone
 
 .. code-block:: bash
 
-   git clone https://github.com/YOUR_USERNAME/ncas-temperature-rh-1-software.git
-   cd ncas-temperature-rh-1-software
+   git clone https://github.com/YOUR_USERNAME/chilbolton-temperature-rh-utils.git
+   cd chilbolton-temperature-rh-utils
 
 3. Add the upstream repository:
 
 .. code-block:: bash
 
-   git remote add upstream https://github.com/ORIGINAL_OWNER/ncas-temperature-rh-1-software.git
+   git remote add upstream https://github.com/longlostjames/chilbolton-temperature-rh-utils.git
 
 Development Environment
 ~~~~~~~~~~~~~~~~~~~~~~~
