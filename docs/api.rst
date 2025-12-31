@@ -1,7 +1,7 @@
 API Reference
 =============
 
-This section provides detailed API documentation for the key functions and classes in the NCAS Temperature RH-1 Software.
+This section provides detailed API documentation for the key functions and classes in the Chilbolton Temperature RH Utils Software.
 
 flag_purge_times Module
 ------------------------
