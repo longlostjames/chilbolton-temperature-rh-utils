@@ -29,6 +29,41 @@ Once published, install the latest stable version:
 
    pip install chilbolton-temperature-rh-utils
 
+From GitHub
+~~~~~~~~~~~
+
+Install directly from GitHub without cloning the repository:
+
+**Latest version from main branch:**
+
+.. code-block:: bash
+
+   pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git
+
+**Specific branch:**
+
+.. code-block:: bash
+
+   pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git@branch-name
+
+**Specific tag or release:**
+
+.. code-block:: bash
+
+   pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git@v1.0.0
+
+**With optional dependencies:**
+
+.. code-block:: bash
+
+   pip install "chilbolton-temperature-rh-utils[dev,docs] @ git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git"
+
+**Using SSH (if you have SSH keys configured):**
+
+.. code-block:: bash
+
+   pip install git+ssh://git@github.com/longlostjames/chilbolton-temperature-rh-utils.git
+
 From Source (Development)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 

@@ -37,12 +37,53 @@ pip install -e ".[dev,docs]"
 pip install .
 ```
 
-### 4. Install from GitHub (Future)
+### 4. Install Directly from GitHub
 
-Once published, users can install directly from GitHub:
+You can install directly from GitHub without cloning the repository:
+
+#### Install from Main Branch
 
 ```bash
 pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git
+```
+
+#### Install from a Specific Branch
+
+```bash
+pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git@develop
+```
+
+#### Install from a Specific Tag or Release
+
+```bash
+pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git@v1.0.0
+```
+
+#### Install from a Specific Commit
+
+```bash
+pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git@abc123def
+```
+
+#### Install with Optional Dependencies from GitHub
+
+```bash
+# With development dependencies
+pip install "chilbolton-temperature-rh-utils[dev] @ git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git"
+
+# With documentation dependencies
+pip install "chilbolton-temperature-rh-utils[docs] @ git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git"
+
+# With all optional dependencies
+pip install "chilbolton-temperature-rh-utils[dev,docs] @ git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git"
+```
+
+#### Using SSH Instead of HTTPS
+
+If you have SSH keys configured:
+
+```bash
+pip install git+ssh://git@github.com/longlostjames/chilbolton-temperature-rh-utils.git
 ```
 
 ## Building Distribution Packages

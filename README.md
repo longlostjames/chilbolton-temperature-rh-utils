@@ -18,6 +18,24 @@ NCAS Temperature RH-1 Software - Processing utilities for Chilbolton temperature
 pip install chilbolton-temperature-rh-utils
 ```
 
+### From GitHub
+
+Install directly from GitHub without cloning:
+
+```bash
+# Install the latest version from main branch
+pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git
+
+# Install a specific branch
+pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git@branch-name
+
+# Install a specific tag/release
+pip install git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git@v1.0.0
+
+# Install with optional dependencies
+pip install "chilbolton-temperature-rh-utils[dev,docs] @ git+https://github.com/longlostjames/chilbolton-temperature-rh-utils.git"
+```
+
 ### From Source
 
 ```bash
