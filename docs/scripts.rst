@@ -1,7 +1,7 @@
 Scripts Reference
 =================
 
-This section provides detailed documentation for each script in the NCAS Temperature RH-1 Software package.
+This section provides detailed documentation for each script in the Chilbolton Temperature RH Utils Software package.
 
 Data Processing Scripts
 -----------------------
@@ -40,6 +40,184 @@ Convert raw Campbell Scientific CR1000X data files to CF-compliant NetCDF format
    python process_hmp155.py CR1000X_Chilbolton_Rxcabinmet1_20200115.dat \
        -m metadata.json \
        -o /gws/pw/j07/ncas_obs_vol2/cao/2020/
+
+process_hmp155_f5.py
+~~~~~~~~~~~~~~~~~~~~
+
+Convert legacy Format5 binary data files to CF-compliant NetCDF format.
+
+**Command Line Arguments:**
+
+.. code-block:: text
+
+   usage: process_hmp155_f5.py [-h] [-m METADATA] [-o OUTPUT] input_file
+
+   positional arguments:
+     input_file            Input Format5 file (e.g., chan241231.000)
+
+   optional arguments:
+     -h, --help            Show help message and exit
+     -m METADATA           Metadata JSON file (default: metadata.json)
+     -o OUTPUT             Output directory (default: current directory)
+
+**Features:**
+
+* Reads Format5 binary format files
+* Uses ``read_format5_header.py`` to parse file headers
+* Uses ``read_format5_content.py`` to extract data records
+* Loads sensor calibration from ``f5channelDB.chdb``
+* Maps raw counts to physical units using rawrange/realrange
+* Converts temperature from Celsius to Kelvin
+* Handles year-crossing timestamps correctly
+* Writes CF-compliant NetCDF with proper time encoding
+
+**Format5 Processing Steps:**
+
+1. Extract header metadata (channels, sample interval, timestamps)
+2. Read channel database for calibration parameters
+3. Parse binary data records into Polars DataFrame
+4. Apply linear scaling: ``physical = (raw - raw_min) / (raw_max - raw_min) * (real_max - real_min) + real_min``
+5. Convert temperature to Kelvin (add 273.15)
+6. Create NetCDF file with time variables and data
+
+**Example:**
+
+.. code-block:: bash
+
+   python process_hmp155_f5.py /gws/pw/j07/ncas_obs_vol2/cao/raw_data/legacy/chan241231.000 \
+       -m metadata_f5.json \
+       -o /gws/pw/j07/ncas_obs_vol2/cao/2024/
+
+read_format5_header.py
+~~~~~~~~~~~~~~~~~~~~~~
+
+Extract header information from Format5 binary data files.
+
+**Function:**
+
+.. code-block:: python
+
+   def read_format5_header(path_filename):
+       """
+       Reads the header information from a format5 data file.
+       Returns a dictionary containing header metadata.
+       """
+
+**Extracted Information:**
+
+* ``present``: File existence flag
+* ``comment_size``: Byte size of comment section
+* ``header_size``: Byte size of header section
+* ``dataline_size``: Byte size of each data record
+* ``descriptor``: File description
+* ``database``: Associated database name
+* ``sample_interval``: Data sampling interval
+* ``chids``: List of channel identifiers
+* ``chstat``: Channel status for each channel
+* ``num_sensors``: Total number of sensors
+* ``start_ts``: First timestamp in file
+* ``finish_ts``: Last timestamp in file
+* ``data_rows``: Number of data records
+
+**Example:**
+
+.. code-block:: python
+
+   from read_format5_header import read_format5_header
+   
+   header = read_format5_header('chan241231.000')
+   print(f"Channels: {header['chids']}")
+   print(f"Start time: {header['start_ts']}")
+   print(f"Records: {header['data_rows']}")
+
+read_format5_content.py
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Parse Format5 binary data records and create a Polars DataFrame.
+
+**Function:**
+
+.. code-block:: python
+
+   def read_format5_content(path_file, header):
+       """
+       Reads the content of a format5 data file and stores it in a Polars DataFrame.
+       Returns DataFrame with TIMESTAMP and channel columns.
+       """
+
+**Processing Steps:**
+
+1. Skip to data section using header offset information
+2. Parse each line as comma-separated timestamp + space-separated data
+3. Convert first 5 values (month, day, hour, minute, second) to timestamps
+4. Extract year from filename (YY format + 2000)
+5. Create DataFrame with timestamp and all channel columns
+6. Cast timestamp to Datetime format
+7. Cast data columns to Float64
+
+**Output Columns:**
+
+* ``TIMESTAMP``: Datetime column in format YYYY-MM-DD HH:MM:SS
+* Channel columns: One column per channel from header (e.g., ``oatnew_ch``, ``rhnew_ch``)
+
+**Example:**
+
+.. code-block:: python
+
+   from read_format5_header import read_format5_header
+   from read_format5_content import read_format5_content
+   
+   header = read_format5_header('chan241231.000')
+   df = read_format5_content('chan241231.000', header)
+   print(df)
+
+read_format5_chdb.py
+~~~~~~~~~~~~~~~~~~~~
+
+Load and parse Format5 channel database (.chdb) files.
+
+**Function:**
+
+.. code-block:: python
+
+   def read_format5_chdb(path_file):
+       """
+       Reads the format5 channel database (.chdb) file.
+       Returns a dictionary where each channel is a key with calibration properties.
+       """
+
+**Channel Properties:**
+
+* ``title``: Channel description
+* ``location``: Sensor location
+* ``rawrange``: Raw sensor output range (dict with ``lower``, ``upper``)
+* ``rawunits``: Units of raw values (e.g., "counts")
+* ``realrange``: Calibrated physical value range (dict with ``lower``, ``upper``)
+* ``realunits``: Units of physical values (e.g., "deg_C")
+* ``interval``: Sampling interval in seconds
+
+**Database Format:**
+
+.. code-block:: text
+
+   channel oatnew_ch
+   title Outside Air Temperature (New)
+   location Chilbolton
+   rawrange -32768 32767
+   rawunits counts
+   realrange -40.0 60.0
+   realunits deg_C
+   interval 60.0
+
+**Example:**
+
+.. code-block:: python
+
+   from read_format5_chdb import read_format5_chdb
+   
+   chdb = read_format5_chdb('f5channelDB.chdb')
+   oat_config = chdb['oatnew_ch']
+   print(f"Temperature range: {oat_config['realrange']['lower']} to {oat_config['realrange']['upper']} {oat_config['realunits']}")
 
 split_cr1000x_data_daily.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -357,3 +535,84 @@ Shell script to process an entire year of data sequentially.
 
    # Process with correction files
    ./proc_year.sh 2020 temp_corrections.txt rh_corrections.txt
+
+proc_year_f5.sh
+~~~~~~~~~~~~~~~
+
+Shell script to process an entire year of legacy Format5 data sequentially.
+
+**Usage:**
+
+.. code-block:: text
+
+   ./proc_year_f5.sh -y YEAR
+
+**Arguments:**
+
+* ``-y YEAR``: Four-digit year to process (required)
+
+**Data Locations:**
+
+* Input: ``/gws/pw/j07/ncas_obs_vol2/cao/raw_data/legacy/cao-analog-format5_chilbolton/data/long-term/format5/``
+* Output: ``/gws/pw/j07/ncas_obs_vol2/cao/processing/ncas-temperature-rh-1/data/long-term/level1_f5/YYYY/``
+* Metadata: ``metadata_f5.json``
+
+**Processing Range:**
+
+* Default date range: August 25 to December 31
+* Format5 files named: ``chanYYMMDD.000`` (e.g., ``chan241231.000``)
+
+**Workflow:**
+
+1. Activates conda environment ``cao_3_11``
+2. Loops through each day in the date range
+3. Processes Format5 file with ``process_hmp155_f5.py``
+4. Applies QC flags with ``flag_purge_times.py``
+5. Uses previous day's NetCDF file for continuity
+6. Handles correction files if specified
+7. Outputs to year-specific directory
+
+**Features:**
+
+* Automatic directory creation
+* Previous day file lookup
+* Optional temperature and RH correction files
+* Handles missing input files gracefully
+* Uses Format5-specific metadata
+
+**Example:**
+
+.. code-block:: bash
+
+   # Process 2024 Format5 data
+   ./proc_year_f5.sh -y 2024
+
+   # With correction files
+   ./proc_year_f5.sh -y 2024 \
+       --corr_file_temperature temp_corrections_2024.txt \
+       --corr_file_rh rh_corrections_2024.txt
+
+proc_year_stfc.sh
+~~~~~~~~~~~~~~~~~
+
+Shell script to process an entire year of STFC data (alternative processing variant).
+
+**Usage:**
+
+.. code-block:: text
+
+   ./proc_year_stfc.sh YEAR [CORR_FILE_TEMP] [CORR_FILE_RH]
+
+**Features:**
+
+* Similar workflow to ``proc_year.sh``
+* Uses ``process_hmp155_stfc.py`` for processing
+* Uses ``metadata_stfc.json`` for instrument configuration
+* Outputs to STFC-specific directory structure
+
+**Example:**
+
+.. code-block:: bash
+
+   ./proc_year_stfc.sh 2020
+

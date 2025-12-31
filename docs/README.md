@@ -1,6 +1,6 @@
-# NCAS Temperature RH-1 Software Documentation
+# Chilbolton Temperature RH Utils Software Documentation
 
-This directory contains the Sphinx documentation for the NCAS Temperature RH-1 Software.
+This directory contains the Sphinx documentation for the Chilbolton Temperature RH Utils Software.
 
 ## Building the Documentation
 

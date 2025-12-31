@@ -1,7 +1,7 @@
 Usage Guide
 ===========
 
-This guide covers common workflows for processing meteorological sensor data using the NCAS Temperature RH-1 Software.
+This guide covers common workflows for processing meteorological sensor data using the Chilbolton Temperature RH Utils Software.
 
 Data Processing Workflow
 -------------------------
@@ -119,6 +119,98 @@ Create statistical summaries:
 
    # Weekly boxplots
    python boxplot_temperature.py -y 2020 -f weekly
+
+Processing Legacy Format5 Data
+-------------------------------
+
+For processing historical data stored in Format5 binary format, use the Format5-specific scripts.
+
+Format5 Overview
+~~~~~~~~~~~~~~~~
+
+Format5 is a legacy binary data format used for meteorological data acquisition at the Chilbolton Atmospheric Observatory. Format5 files contain:
+
+* Header with channel metadata and configuration
+* Binary data organized by channels (sensors)
+* Timestamp information embedded in each data record
+* Channel database (`.chdb`) file defining sensor properties
+
+Format5 Workflow
+~~~~~~~~~~~~~~~~
+
+The Format5 processing workflow is similar to the standard workflow but uses specialized scripts:
+
+1. Read Format5 header and channel database
+2. Convert Format5 data to NetCDF using ``process_hmp155_f5.py``
+3. Apply quality control flags (same as standard workflow)
+4. Generate visualizations (same as standard workflow)
+
+Convert Format5 to NetCDF
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Process Format5 data files (typically named ``chanYYMMDD.000``):
+
+.. code-block:: bash
+
+   python process_hmp155_f5.py /path/to/chan241231.000 \
+       -m metadata_f5.json \
+       -o /gws/pw/j07/ncas_obs_vol2/cao/2024/
+
+The script automatically:
+
+* Reads the Format5 header using ``read_format5_header.py``
+* Parses channel data using ``read_format5_content.py``
+* Loads channel calibration from ``f5channelDB.chdb``
+* Maps raw sensor values to physical units
+* Converts temperature to Kelvin (adds 273.15)
+
+Format5 Channel Database
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``f5channelDB.chdb`` file defines sensor properties for each channel:
+
+.. code-block:: text
+
+   channel oatnew_ch
+   title Outside Air Temperature (New)
+   location Chilbolton
+   rawrange -32768 32767
+   rawunits counts
+   realrange -40.0 60.0
+   realunits deg_C
+   interval 60.0
+
+The processing script uses ``rawrange`` and ``realrange`` to convert raw sensor counts to calibrated physical values.
+
+Batch Processing Format5 Data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Process an entire year of Format5 data:
+
+.. code-block:: bash
+
+   ./proc_year_f5.sh -y 2024
+
+This script:
+
+* Locates Format5 files in the legacy data archive
+* Processes each day with ``process_hmp155_f5.py``
+* Applies QC flags with ``flag_purge_times.py``
+* Uses the correct metadata file (``metadata_f5.json``)
+* Outputs to the Format5 processing directory
+
+Format5 vs Standard Processing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Key differences between Format5 and standard CR1000X processing:
+
+* **Input format**: Binary Format5 vs. ASCII TOA5
+* **Metadata**: Channel database (.chdb) vs. JSON metadata only
+* **Calibration**: Raw-to-real range mapping vs. direct scaling factors
+* **Scripts**: ``process_hmp155_f5.py`` vs. ``process_hmp155.py``
+* **Batch script**: ``proc_year_f5.sh`` vs. ``proc_year.sh``
+
+The output NetCDF files and QC flagging procedures are identical for both processing paths.
 
 Batch Processing
 ----------------

@@ -1,7 +1,7 @@
 Contributing
 ============
 
-Thank you for your interest in contributing to the NCAS Temperature RH-1 Software!
+Thank you for your interest in contributing to the Chilbolton Temperature RH Utils Software!
 
 Development Setup
 -----------------
