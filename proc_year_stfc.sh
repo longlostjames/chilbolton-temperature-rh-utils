@@ -44,7 +44,9 @@ while [ "$current_date" -le "$end_date" ]; do
 
     # Construct paths to the current day's files
     infile="$raw_data_base/$year/$YM/CR1000XSeries_Chilbolton_Rxcabinmet1_${current_date}.dat"
-    mfile="/home/users/cjwalden/git/ncas-temperature-rh-1-software/metadata_stfc.json"
+    # Find metadata file from package installation
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    mfile="${script_dir}/metadata_stfc.json"
 
     # Generate NetCDF file
     process-hmp155-stfc "$infile" -m "$mfile" -o "$outdir"

@@ -44,7 +44,9 @@ while [ "$current_date" -le "$end_date" ]; do
 
     # Construct paths to the current day's files
     infile="$raw_data_base/$year/$YM/CR1000XSeries_Chilbolton_Rxcabinmet1_${current_date}.dat"
-    mfile="/home/users/cjwalden/git/ncas-temperature-rh-1-software/metadata.json"
+    # Find metadata file from package installation
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    mfile="${script_dir}/metadata.json"
     corr_file_oat="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/oatnew_ch.corr"
     corr_file_rh="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/rhnew_ch.corr"
 

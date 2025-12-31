@@ -47,7 +47,9 @@ while [ "$current_date" -le "$end_date" ]; do
     # Construct paths to the current and previous day's files
     infile="$raw_data_base/chan${YMD}.000"
 
-    mfile="/home/users/cjwalden/git/ncas-temperature-rh-1-software/metadata_f5.json"
+    # Find metadata file from package installation
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    mfile="${script_dir}/metadata_f5.json"
     corr_file_oat="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/oatnew_ch.corr"
     corr_file_rh="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/rhnew_ch.corr"
 
