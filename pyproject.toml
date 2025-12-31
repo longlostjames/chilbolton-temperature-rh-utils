@@ -13,8 +13,7 @@ authors = [
 maintainers = [
     {name = "NCAS"},
 ]
-license = {text = "MIT"}
-license-files = ["LICENSE"]
+license = {file = "LICENSE"}
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
