@@ -71,7 +71,7 @@ def preprocess_data(infile):
     return df
 
 
-def main(infile, outdir="./", metadata_file="metadata.json", aws_7_file=None):
+def process_file(infile, outdir="./", metadata_file="metadata.json", aws_7_file=None):
     df = preprocess_data(infile)
     print(df)
 
@@ -244,7 +244,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    main(
+    process_file(
         args.infile,
         outdir=args.outdir,
         metadata_file=args.metadata_file,
@@ -253,3 +253,19 @@ if __name__ == "__main__":
         #corr_file_rh=args.corr_file_rh
     )
 
+
+def main():
+    """CLI entry point for process-hmp155 command."""
+    parser = argparse.ArgumentParser(description="Process Vaisala HMP155 Temperature and Humidity Probe data to netCDF")
+    parser.add_argument("infile", type=str, help="Input file")
+    parser.add_argument("-o", "--outdir", type=str, default="./", help="Output directory")
+    parser.add_argument("-m", "--metadata_file", type=str, default="metadata.json", help="Metadata file")
+
+    args = parser.parse_args()
+
+    process_file(
+        args.infile,
+        outdir=args.outdir,
+        metadata_file=args.metadata_file,
+        aws_7_file=None
+    )

@@ -254,8 +254,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process Vaisala HMP155 Temperature and Humidity Probe data to netCDF")
     parser.add_argument("infile", type=str, help="Input file")
     parser.add_argument("-o", "--outdir", type=str, default="./", help="Output directory")
-    parser.add_argument("-m", "--metadata_file", type=str, default="metadata_stfc.json", help="Metadata file")
+    parser.add_argument("-m", "--metadata_file", type=str, default="metadata.json", help="Metadata file")
 
     args = parser.parse_args()
-    main(args.infile, outdir=args.outdir, metadata_file=args.metadata_file)
+    process_file(args.infile, outdir=args.outdir, metadata_file=args.metadata_file)
+
+
+def main():
+    """CLI entry point for process-hmp155-stfc command."""
+    import argparse
+    parser = argparse.ArgumentParser(description="Process Vaisala HMP155 Temperature and Humidity Probe data (STFC variant) to netCDF")
+    parser.add_argument("infile", type=str, help="Input file")
+    parser.add_argument("-o", "--outdir", type=str, default="./", help="Output directory")
+    parser.add_argument("-m", "--metadata_file", type=str, default="metadata.json", help="Metadata file")
+
+    args = parser.parse_args()
+    process_file(args.infile, outdir=args.outdir, metadata_file=args.metadata_file)
 
