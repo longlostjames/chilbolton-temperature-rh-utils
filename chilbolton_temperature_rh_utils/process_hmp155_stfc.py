@@ -116,7 +116,7 @@ def preprocess_data(infile):
     return df
 
 
-def main(infile, outdir="./", metadata_file="metadata_stfc.json", aws_7_file=None):
+def process_file(infile, outdir="./", metadata_file="metadata_stfc.json", aws_7_file=None):
     # Read data
     df = preprocess_data(infile)
 
