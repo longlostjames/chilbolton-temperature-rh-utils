@@ -38,36 +38,87 @@ def proc_line(line, extra_info=None):
         return []
 
 def preprocess_data(infile):
-    # Only read relevant columns, skip first 4 lines
-    try:
-        df = pl.read_csv(
-            infile,
-            skip_rows=4,
-            columns=["TIMESTAMP", "Air_T_Avg", "RH_Avg"],
-            try_parse_dates=True,
-            ignore_errors=True
-        )
-    except Exception as e:
-        print(f"Error reading file: {e}")
-        return pl.DataFrame({"TIMESTAMP": [], "Air_T_Avg": [], "RH_Avg": []})
+    print(infile)
 
-    # Only keep relevant columns
-    keep = ["TIMESTAMP", "Air_T_Avg", "RH_Avg"]
-    for col in keep:
-        if col not in df.columns:
-            print(f"Column '{col}' missing, filling with null.")
-            df = df.with_columns(pl.lit(None).alias(col))
-    df = df.select(keep)
-    # Convert types
+    # Step 1: Read the file
+    with open(infile, "r") as f:
+        data = f.readlines()
+
+    # Step 2: Parse the header to get column names
+    header_line = data[1].strip()  # Second line contains column names
+    column_names = [col.strip('"') for col in header_line.split(",")]
+    print(f"Parsed column names: {column_names}")
+
+    # Step 3: Skip metadata lines (first 4 lines are metadata)
+    data_lines = data[4:]  # Data starts after the first 4 lines
+
+    # Step 4: Process the data
+    processed_data = []
+    for line in data_lines:
+        if line.strip():  # Skip empty lines
+            fields = line.strip().split(",")
+            processed_data.append(fields)
+
+    # Step 5: Create a Polars DataFrame with the parsed column names
+    df = pl.DataFrame(processed_data, schema=column_names, orient="row")
+
+    # Step 6: Ensure required columns exist
+    required_columns = ["TIMESTAMP", "Air_T_Avg", "RH_Avg"]
+    for column in required_columns:
+        if column not in df.columns:
+            print(f"Column '{column}' is missing. Filling with null values.")
+            df = df.with_columns(pl.lit(None).alias(column))
+
+    # Step 7: Strip quotes from all string columns
+    for column in df.columns:
+        if df.schema[column] == pl.Utf8:
+            df = df.with_columns(
+                pl.col(column).str.strip_chars('"').alias(column)
+            )
+
+    # Step 8: Replace invalid values (e.g., "NAN") with null
+    for column in ["Air_T_Avg", "RH_Avg"]:
+        if column in df.columns:
+            df = df.with_columns(
+                pl.when(pl.col(column) == "NAN")
+                .then(None)
+                .otherwise(pl.col(column))
+                .alias(column)
+            )
+
+    # Step 9: Convert columns to appropriate data types
+    type_conversions = {
+        "TIMESTAMP": pl.Datetime,
+        "Air_T_Avg": pl.Float64,
+        "RH_Avg": pl.Float64,
+    }
+
+    for column, dtype in type_conversions.items():
+        if column in df.columns:
+            if column == "TIMESTAMP":
+                # Parse TIMESTAMP column to proper datetime format
+                df = df.with_columns(
+                    pl.col("TIMESTAMP").str.strptime(
+                        pl.Datetime, format="%Y-%m-%d %H:%M:%S", strict=False
+                    )
+                )
+            else:
+                df = df.with_columns(pl.col(column).cast(dtype))
+
+    # Step 10: Keep only the required columns
+    df = df.select(["TIMESTAMP", "Air_T_Avg", "RH_Avg"])
+
+    # Step 11: Apply scale factors and offsets
     scale_factor_Air_T = 0.02
     offset_Air_T = 233.15  # Offset for temperature in Kelvin
-    scale_factor_RH = 0.02  # Scale factor for relative humidity, typically 0.02
-    offset_RH = 0.0  # Offset for relative humidity, typically 0
+    scale_factor_RH = 0.02  # Scale factor for relative humidity
+    offset_RH = 0.0  # Offset for relative humidity
 
     df = df.with_columns([
-        pl.col("Air_T_Avg").cast(pl.Float64) * scale_factor_Air_T + offset_Air_T,
-        pl.col("RH_Avg").cast(pl.Float64) * scale_factor_RH + offset_RH
+        (pl.col("Air_T_Avg") * scale_factor_Air_T + offset_Air_T).alias("Air_T_Avg"),
+        (pl.col("RH_Avg") * scale_factor_RH + offset_RH).alias("RH_Avg"),
     ])
+
     return df
 
 
