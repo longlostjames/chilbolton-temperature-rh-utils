@@ -165,10 +165,10 @@ def main():
                         help='Path to the correction file for bad relative humidity intervals')
     parser.add_argument('--window-minutes', type=int, default=8,
                         help='Rolling window size in minutes (default: 8)')
-    parser.add_argument('--std-threshold-temp', type=float, default=0.07,
-                        help='Standard deviation threshold for temperature (default: 0.07)')
-    parser.add_argument('--std-threshold-rh', type=float, default=0.05,
-                        help='Standard deviation threshold for RH (default: 0.05)')
+    parser.add_argument('--std-threshold-temp', type=float, default=0.03,
+                        help='Standard deviation threshold for temperature (default: 0.03)')
+    parser.add_argument('--std-threshold-rh', type=float, default=0.02,
+                        help='Standard deviation threshold for RH (default: 0.02)')
 
     args = parser.parse_args()
     
@@ -187,6 +187,14 @@ def main():
     flag_rh_dip = 4
 
     with xr.open_dataset(filename, mode='r+') as ds:
+        # Check if required variables exist
+        if 'time' not in ds.dims and 'time' not in ds.coords:
+            print(f"Error: No 'time' variable found in {filename}")
+            print(f"Available dimensions: {list(ds.dims)}")
+            print(f"Available coordinates: {list(ds.coords)}")
+            print(f"Available variables: {list(ds.data_vars)}")
+            return
+        
         # Sort by time to ensure proper processing
         ds = ds.sortby('time')
     
@@ -200,8 +208,9 @@ def main():
         purge_rh = detect_flat(ds['relative_humidity'], window_size, std_threshold_rh)
         purge_rh = exclude_high_rh(ds['relative_humidity'], purge_rh, max_rh=99.5)
     
-        # Require both signals to be flat
-        combined_purge = purge_temp & purge_rh
+        # Use RH flatness as primary indicator (RH is the sensor being purged)
+        # Temperature may also be flat during purge but RH is the key indicator
+        combined_purge = purge_rh
     
         # Identify distinct purge periods
         purge_periods = []
@@ -225,18 +234,37 @@ def main():
         purge_periods_with_std = []
         for start, end in purge_periods:
             rh_std = ds['relative_humidity'][start:end].std().item()
-            purge_periods_with_std.append((start, end, rh_std))
+            temp_std = ds['air_temperature'][start:end].std().item()
+            # Get the time of day for this period
+            period_time = pd.to_datetime(ds['time'].values[start])
+            purge_periods_with_std.append((start, end, rh_std, temp_std, period_time))
     
-        # Sort purge periods by RH standard deviation (ascending) and keep the flattest
-        purge_periods_with_std.sort(key=lambda x: x[2])  # Sort by the third element (std)
+        # Filter out periods around midnight (23:00-02:00) and evening (17:00-20:00) as these are likely not purge cycles
+        filtered_periods = []
+        for start, end, rh_std, temp_std, period_time in purge_periods_with_std:
+            hour = period_time.hour
+            # Exclude periods around midnight (23:00-02:00) and evening (17:00-20:00)
+            # Purges typically occur during morning/midday hours (8:00-14:00)
+            if not ((hour >= 23 or hour <= 2) or (17 <= hour < 20) or hour < 6):
+                # Score primarily by RH flatness (it's the sensor being purged)
+                combined_score = rh_std * 100 + temp_std  # Weight RH much more heavily
+                filtered_periods.append((start, end, rh_std, temp_std, period_time, combined_score))
+        
+        # If no valid periods after filtering, fall back to all periods
+        if not filtered_periods:
+            filtered_periods = [(start, end, rh_std, temp_std, period_time, rh_std + temp_std * 10) 
+                               for start, end, rh_std, temp_std, period_time in purge_periods_with_std]
+        
+        # Sort by combined score (flattest in both variables)
+        filtered_periods.sort(key=lambda x: x[5])  # Sort by combined score
     
         # For dates from 2018-03-13 onwards, only keep the single flattest purge period
         dataset_date = pd.to_datetime(ds['time'].values[0]).date()
         if dataset_date >= pd.to_datetime("2018-03-13").date():
-            purge_periods = [(start, end) for start, end, _ in purge_periods_with_std[:1]]  # Keep only the flattest period
+            purge_periods = [(start, end) for start, end, _, _, _, _ in filtered_periods[:1]]  # Keep only the flattest period
         else:
             # For earlier dates, keep the two flattest purge periods
-            purge_periods = [(start, end) for start, end, _ in purge_periods_with_std[:2]]
+            purge_periods = [(start, end) for start, end, _, _, _, _ in filtered_periods[:2]]
     
         # If only one purge period is found and the date is before 2018-03-13, flag an equivalent period 12 hours earlier or later
         if len(purge_periods) == 1 and dataset_date < pd.to_datetime("2018-03-13").date():
