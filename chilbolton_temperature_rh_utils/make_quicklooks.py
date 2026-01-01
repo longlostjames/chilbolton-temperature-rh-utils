@@ -181,8 +181,6 @@ def plot_day(ds, nc_filename, outdir):
             ax_zoom_rh.set_xlabel('Time (UTC)')
             ax_zoom_rh.grid(True)
 
-    plt.tight_layout()
-
     # Save to PNG
     outfile = os.path.join(outdir, f"{nc_filename.replace('.nc', '.png')}")
     plt.savefig(outfile, dpi=200)
