@@ -65,6 +65,7 @@ def split_file(input_file, output_dir, delimiter, timestamp_column, verbose=Fals
             group.drop(columns='group_date').to_csv(
                 f,
                 index=False,
+                header=False,  # Don't write header - already in header_lines
                 quoting=csv.QUOTE_MINIMAL,
                 quotechar='"'
             )
