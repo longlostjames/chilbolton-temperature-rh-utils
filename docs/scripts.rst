@@ -282,10 +282,22 @@ Automatically detect and flag purge cycles and recovery periods in NetCDF files.
 **Detection Parameters:**
 
 * Window size: 8 minutes (240 seconds)
-* Temperature flat threshold: 0.07 K standard deviation
-* RH flat threshold: 0.03 % standard deviation
-* RH exclusion: Values ≥ 99.8%
+* Temperature flat threshold: 0.03 K standard deviation (default)
+* RH flat threshold: 0.02 % standard deviation (default)
+* RH exclusion: Values ≥ 99.8% (saturated conditions)
 * Recovery period: 6 minutes after purge end
+* Time filtering: Excludes hours <6, 17-20, and 23-2 (focuses on typical purge time ~10:30 UTC)
+* Primary indicator: Relative humidity flatness (more reliable than temperature)
+* Scoring: Heavily weighted toward RH stability (rh_std × 100 + temp_std)
+* Saturation handling: Automatically uses previous day's purge timing when RH is saturated
+
+**Algorithm Features:**
+
+* RH-focused detection prioritizes humidity flatness over temperature
+* Time-of-day filtering eliminates false positives from midnight/evening stable periods
+* Tightened thresholds (0.07→0.03 K, 0.05→0.02 %) improve accuracy
+* Automatic fallback to previous day's timing during saturated conditions
+* Robust error handling for edge cases and missing data
 
 **QC Flag Values:**
 
@@ -718,7 +730,7 @@ Generate quicklook plots showing time series data with QC flags for temperature 
 
 **Plot Features:**
 
-* **Full-day plots**: Show complete 24-hour time series
+* **Full-day plots**: Show complete 24-hour time series with improved vertical spacing
 * **QC Flag visualization**: 
 
   - Red points: Purge cycles (flag = 3)
@@ -728,5 +740,7 @@ Generate quicklook plots showing time series data with QC flags for temperature 
   - Peach shading: RH dip recovery regions (~6 minutes after purge)
 
 * **Zoomed plots**: Individual subplots for each purge event with ±10 minute buffer
+* **Layout optimization**: Generous spacing between subplot rows prevents label overlap
+* **High resolution**: 200 DPI PNG output suitable for reports and presentations
 
 
