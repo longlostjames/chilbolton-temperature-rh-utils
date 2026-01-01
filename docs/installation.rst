@@ -136,9 +136,13 @@ After installation, the following command-line tools are available:
 
 .. code-block:: bash
 
+   split-cr1000x-data-daily        # Split CR1000X files into daily files
    process-hmp155                  # Process CR1000X data
    process-hmp155-f5               # Process Format5 data
    process-hmp155-stfc             # Process STFC variant
+   process-hmp155-year             # Batch process year of CR1000X data
+   process-hmp155-year-f5          # Batch process year of Format5 data
+   process-hmp155-year-stfc        # Batch process year of STFC data
    flag-hmp155-purge-times         # Automated purge flagging
    flag-hmp155-purge-times-manual  # Manual purge flagging
    flag-hmp155-low-temperature     # Flag low temperatures
@@ -149,6 +153,7 @@ Verify the installation:
 
 .. code-block:: bash
 
+   split-cr1000x-data-daily --help
    process-hmp155 --help
    process-hmp155-f5 --help
    flag-hmp155-purge-times --help
