@@ -28,6 +28,7 @@ Key Features
 ------------
 
 * **Data Processing**: Convert Campbell Scientific CR1000X data or legacy Format5 files to standardized NetCDF format
+* **File Splitting**: Split continuous datalogger files into daily files with automatic deduplication
 * **Format5 Support**: Full support for legacy binary Format5 data with channel database calibration
 * **Quality Control**: Automated detection of purge cycles and manual flagging capabilities
 * **Visualization**: Generate daily quicklook plots and statistical summaries
@@ -52,13 +53,21 @@ Historical binary format used at CAO with:
 Quick Start
 -----------
 
+**Split Raw Data Files**
+
+Split continuous CR1000X files into daily files:
+
+.. code-block:: bash
+
+   split-cr1000x-data-daily -i /path/to/raw_data/ -o daily_files/ -v
+
 **Standard CR1000X Processing**
 
 Process a single day of data:
 
 .. code-block:: bash
 
-   python process_hmp155.py input_data.dat -m metadata.json -o output_dir/
+   process-hmp155 input_data.dat -m metadata.json -o output_dir/
 
 **Format5 Processing**
 
@@ -66,7 +75,7 @@ Process legacy Format5 data:
 
 .. code-block:: bash
 
-   python process_hmp155_f5.py chan241231.000 -m metadata_f5.json -o output_dir/
+   process-hmp155-f5 chan241231.000 -m metadata_f5.json -o output_dir/
 
 **Quality Control**
 
@@ -74,7 +83,7 @@ Flag purge cycles in processed NetCDF files:
 
 .. code-block:: bash
 
-   python flag_purge_times.py -f data.nc -p previous_day.nc
+   flag-hmp155-purge-times -f data.nc -p previous_day.nc
 
 **Visualization**
 

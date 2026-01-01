@@ -20,7 +20,7 @@ If you have continuous CR1000X datalogger files, split them into daily files:
 
 .. code-block:: bash
 
-   python split_cr1000x_data_daily.py -i /path/to/raw/data -o /path/to/daily/output -v
+   split-cr1000x-data-daily -i /path/to/raw/data -o /path/to/daily/output -v
 
 This creates daily files organized in a ``YYYY/YYYYMM/`` directory structure.
 
