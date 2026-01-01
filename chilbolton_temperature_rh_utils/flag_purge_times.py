@@ -288,6 +288,52 @@ def main():
                 if earlier_start >= 0:  # Ensure the indices are within bounds
                     purge_periods.append((earlier_start, earlier_end))
     
+        # If no purge periods were detected and we have a previous file, use previous day's timing
+        if len(purge_periods) == 0 and previous_filename:
+            try:
+                with xr.open_dataset(previous_filename, mode='r') as prev_ds:
+                    prev_ds = prev_ds.sortby('time')
+                    prev_time = pd.to_datetime(prev_ds['time'].values)
+                    
+                    # Find purge periods in previous day based on QC flags
+                    if 'qc_flag_relative_humidity' in prev_ds:
+                        prev_purge_mask = (prev_ds['qc_flag_relative_humidity'] == 3).values
+                        prev_start = None
+                        prev_purge_times = []
+                        
+                        for i, val in enumerate(prev_purge_mask):
+                            if val and prev_start is None:
+                                prev_start = prev_time[i]
+                            elif not val and prev_start is not None:
+                                prev_end = prev_time[i - 1]
+                                prev_purge_times.append((prev_start, prev_end))
+                                prev_start = None
+                        if prev_start is not None:
+                            prev_purge_times.append((prev_start, prev_time[-1]))
+                        
+                        # Apply same time-of-day to current day
+                        current_time = pd.to_datetime(ds['time'].values)
+                        current_date = current_time[0].date()
+                        
+                        for prev_start, prev_end in prev_purge_times:
+                            # Get time of day from previous purge
+                            start_time_of_day = prev_start.time()
+                            end_time_of_day = prev_end.time()
+                            
+                            # Apply to current day
+                            current_start = pd.Timestamp.combine(current_date, start_time_of_day)
+                            current_end = pd.Timestamp.combine(current_date, end_time_of_day)
+                            
+                            # Find indices in current day's data
+                            start_idx = np.argmin(np.abs((current_time - current_start).total_seconds()))
+                            end_idx = np.argmin(np.abs((current_time - current_end).total_seconds()))
+                            
+                            if start_idx < len(current_time) and end_idx < len(current_time):
+                                purge_periods.append((start_idx, end_idx))
+                                print(f"Applied previous day's purge timing: {current_start.strftime('%H:%M')} - {current_end.strftime('%H:%M')}")
+            except Exception as e:
+                print(f"Warning: Could not use previous day's purge timing: {e}")
+    
         # Initialize QC flags as 1 (good_data)
         qc_temp = xr.full_like(ds['air_temperature'], fill_value=flag_good, dtype=np.int8)
         qc_rh = xr.full_like(ds['relative_humidity'], fill_value=flag_good, dtype=np.int8)
