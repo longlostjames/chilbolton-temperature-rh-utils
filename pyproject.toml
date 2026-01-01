@@ -8,10 +8,10 @@ version = "1.0.0"
 description = "Processing utilities for Chilbolton temperature and relative humidity sensor data"
 readme = "README.md"
 authors = [
-    {name = "NCAS"},
+    {name = "Chris Walden"},
 ]
 maintainers = [
-    {name = "NCAS"},
+    {name = "Chris Walden"},
 ]
 license = {file = "LICENSE"}
 classifiers = [
