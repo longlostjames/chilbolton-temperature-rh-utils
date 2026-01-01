@@ -616,3 +616,60 @@ Shell script to process an entire year of STFC data (alternative processing vari
 
    ./proc_year_stfc.sh 2020
 
+Utility Scripts
+---------------
+
+split_cr1000x_data_daily.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Split CR1000X data files into daily files organized in YYYY/YYYYMM subdirectories.
+
+**Command Line Arguments:**
+
+.. code-block:: text
+
+   usage: split-cr1000x-data-daily [-h] -i INPUT_DIR [-o OUTPUT_DIR] 
+                                    [-d DELIMITER] [-t TIMESTAMP_COLUMN] [-v]
+
+   optional arguments:
+     -h, --help            Show help message and exit
+     -i INPUT_DIR          Directory containing CR1000XSeries_Chilbolton_Rxcabinmet1*.dat files
+     -o OUTPUT_DIR         Directory to write daily files (default: daily_files)
+     -d DELIMITER          Delimiter for input file (default: ',')
+     -t TIMESTAMP_COLUMN   Name of timestamp column (default: TIMESTAMP)
+     -v, --verbose         Enable verbose output
+
+**Features:**
+
+* Preserves TOA5 header format in output files
+* Assigns midnight (00:00:00) records to the previous day
+* Creates YYYY/YYYYMM directory structure automatically
+* Automatically deduplicates identical daily files
+* Handles multiple input files in batch
+
+**Example:**
+
+.. code-block:: bash
+
+   # Split all CR1000X files in toproc/ directory
+   split-cr1000x-data-daily -i /path/to/toproc/ -o daily_files/ -v
+
+   # Custom timestamp column
+   split-cr1000x-data-daily -i raw_data/ -o output/ -t TIMESTAMP -v
+
+**Output Structure:**
+
+.. code-block:: text
+
+   daily_files/
+   ├── 2024/
+   │   ├── 202401/
+   │   │   ├── CR1000XSeries_Chilbolton_Rxcabinmet1_20240101.dat
+   │   │   ├── CR1000XSeries_Chilbolton_Rxcabinmet1_20240102.dat
+   │   │   └── ...
+   │   └── 202402/
+   │       └── ...
+   └── 2025/
+       └── ...
+
+

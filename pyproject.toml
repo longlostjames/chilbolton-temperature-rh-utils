@@ -65,6 +65,7 @@ flag-hmp155-purge-times-manual = "chilbolton_temperature_rh_utils.manual_flag_pu
 flag-hmp155-low-temperature = "chilbolton_temperature_rh_utils.flag_low_temperature:main"
 find-hmp155-purge-shift = "chilbolton_temperature_rh_utils.find_purge_shift:main"
 count-hmp155-purge-flags = "chilbolton_temperature_rh_utils.count_purge_flags:main"
+split-cr1000x-data-daily = "chilbolton_temperature_rh_utils.split_cr1000x_data_daily:main"
 
 [tool.setuptools]
 packages = ["chilbolton_temperature_rh_utils"]

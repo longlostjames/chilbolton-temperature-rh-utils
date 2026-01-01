@@ -75,6 +75,9 @@ process-hmp155 input_data.dat -m metadata.json -o output_dir/
 # Process Format5 data
 process-hmp155-f5 chan241231.000 -m metadata_f5.json -o output_dir/
 
+# Split CR1000X files into daily files
+split-cr1000x-data-daily -i /path/to/raw_data/ -o daily_files/ -v
+
 # Flag purge cycles
 flag-hmp155-purge-times -f data.nc -p previous_day.nc
 

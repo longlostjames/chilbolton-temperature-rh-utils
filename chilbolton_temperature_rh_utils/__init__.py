@@ -13,7 +13,7 @@ This package provides tools for:
 """
 
 __version__ = "1.0.0"
-__author__ = "NCAS"
+__author__ = "Chris Walden"
 
 # Import main processing functions
 from .process_hmp155 import main as process_hmp155_main
@@ -28,6 +28,7 @@ from .flag_low_temperature import main as flag_low_temperature_main
 # Import utility functions
 from .read_format5_header import read_format5_header
 from .read_format5_content import read_format5_content
+from .split_cr1000x_data_daily import main as split_cr1000x_data_daily_main
 from .read_format5_chdb import read_format5_chdb
 
 __all__ = [
