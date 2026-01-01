@@ -672,4 +672,61 @@ Split CR1000X data files into daily files organized in YYYY/YYYYMM subdirectorie
    └── 2025/
        └── ...
 
+Visualization Scripts
+---------------------
+
+make_quicklooks.py
+~~~~~~~~~~~~~~~~~~
+
+Generate quicklook plots showing time series data with QC flags for temperature and relative humidity.
+
+**Command Line Arguments:**
+
+.. code-block:: text
+
+   usage: make-hmp155-quicklooks [-h] -y YEAR [-i INPUT_DIR] [-o OUTPUT_DIR] [-d DAY]
+
+   optional arguments:
+     -h, --help            Show help message and exit
+     -y YEAR               Year to process (e.g., 2025)
+     -i INPUT_DIR          Base directory containing yearly subdirectories of NetCDF files
+     -o OUTPUT_DIR         Base directory to save yearly subdirectories of PNG plots
+     -d DAY                Specific day to process (format: YYYYMMDD)
+
+**Features:**
+
+* Plots full-day time series for air temperature and relative humidity
+* Highlights QC flag values: 0 (good), 2 (bad data), 3 (purge), 4 (RH recovery)
+* Creates zoomed subplots for each purge event (±10 minutes)
+* Automatically converts temperature from K to °C for plotting
+* Shades flagged regions for easy visual identification
+* Saves high-resolution PNG files (200 DPI)
+
+**Example:**
+
+.. code-block:: bash
+
+   # Generate plots for all days in 2025
+   make-hmp155-quicklooks -y 2025 \
+       -i /path/to/netcdf/ \
+       -o /path/to/plots/
+
+   # Generate plot for specific day
+   make-hmp155-quicklooks -y 2025 -d 20250324 \
+       -i /path/to/netcdf/ \
+       -o /path/to/plots/
+
+**Plot Features:**
+
+* **Full-day plots**: Show complete 24-hour time series
+* **QC Flag visualization**: 
+
+  - Red points: Purge cycles (flag = 3)
+  - Blue points: RH recovery periods (flag = 4)
+  - Grey shading: Bad data intervals (flag = 2)
+  - Red shading: Purge event regions
+  - Peach shading: RH dip recovery regions (~6 minutes after purge)
+
+* **Zoomed plots**: Individual subplots for each purge event with ±10 minute buffer
+
 

@@ -86,6 +86,9 @@ flag-hmp155-purge-times-manual -f data.nc --prev-file yesterday.nc
 
 # Flag low temperatures
 flag-hmp155-low-temperature -f data.nc --threshold 245
+
+# Generate quicklook plots
+make-hmp155-quicklooks -y 2025 -i /path/to/netcdf/ -o /path/to/plots/
 ```
 
 ### Python API

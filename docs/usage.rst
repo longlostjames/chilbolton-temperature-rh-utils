@@ -260,6 +260,34 @@ Determine the time-of-day shift between purge cycles in two files:
 
    python find_purge_shift.py file1.nc file2.nc
 
+Step 4: Generate Quicklook Plots
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Create visualization plots for quality control review:
+
+.. code-block:: bash
+
+   make-hmp155-quicklooks -y 2025 \
+       -i /path/to/netcdf/ \
+       -o /path/to/plots/
+
+**Features:**
+
+* Full-day time series plots for temperature and relative humidity
+* Visual highlighting of QC flags (good data, bad data, purge cycles, RH recovery)
+* Zoomed subplots for detailed inspection of purge events
+* High-resolution PNG output suitable for reports
+
+**Single Day Plot:**
+
+To generate a plot for a specific day:
+
+.. code-block:: bash
+
+   make-hmp155-quicklooks -y 2025 -d 20250324 \
+       -i /path/to/netcdf/ \
+       -o /path/to/plots/
+
 QC Flag Values
 --------------
 

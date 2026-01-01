@@ -91,6 +91,14 @@ Generate quicklook plots:
 
 .. code-block:: bash
 
+   make-hmp155-quicklooks -i /path/to/netcdf/ -o /path/to/plots/ -y 2025
+
+**Visualization**
+
+Generate quicklook plots:
+
+.. code-block:: bash
+
    python make_quicklooks.py -i /path/to/data/ -o /path/to/plots/ -y 2020 -d 20200115
 
 Indices and tables

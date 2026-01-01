@@ -29,6 +29,7 @@ from .flag_low_temperature import main as flag_low_temperature_main
 from .read_format5_header import read_format5_header
 from .read_format5_content import read_format5_content
 from .split_cr1000x_data_daily import main as split_cr1000x_data_daily_main
+from .make_quicklooks import main as make_quicklooks_main
 from .read_format5_chdb import read_format5_chdb
 
 __all__ = [

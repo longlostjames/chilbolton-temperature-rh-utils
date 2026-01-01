@@ -148,6 +148,7 @@ After installation, the following command-line tools are available:
    flag-hmp155-low-temperature     # Flag low temperatures
    find-hmp155-purge-shift         # Calculate purge time shifts
    count-hmp155-purge-flags        # Count purge flags
+   make-hmp155-quicklooks          # Generate quicklook plots
 
 Verify the installation:
 
@@ -157,6 +158,7 @@ Verify the installation:
    process-hmp155 --help
    process-hmp155-f5 --help
    flag-hmp155-purge-times --help
+   make-hmp155-quicklooks --help
 
 File System Setup
 -----------------
