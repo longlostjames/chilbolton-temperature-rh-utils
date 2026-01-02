@@ -340,13 +340,21 @@ def main():
     
         # Apply purge flag (3) for each purge period
         for start, end in purge_periods:
+            # Ensure indices are within valid range
+            if start >= len(qc_temp) or end > len(qc_temp):
+                print(f"Warning: Purge period [{start}:{end}] extends beyond data range ({len(qc_temp)}). Skipping.")
+                continue
+                
             qc_temp[start:end] = flag_purge
             qc_rh[start:end] = flag_purge
     
-            # Flag 6 minutes after each purge period as 4
+            # Flag 6 minutes after each purge period as 4 (only if recovery period is within data range)
             recovery_start = end
             recovery_end = min(len(qc_rh), end + int((6 * 60) / time_diff))  # 6 minutes in samples
-            qc_rh[recovery_start:recovery_end] = flag_rh_dip  # Use flag 4 for RH recovery
+            
+            # Only flag recovery if it's within the actual data range
+            if recovery_start < len(qc_rh) and recovery_end > recovery_start:
+                qc_rh[recovery_start:recovery_end] = flag_rh_dip  # Use flag 4 for RH recovery
     
         # Detect RH dips with a preceding flat region
         dip_intervals = detect_rh_dips(
