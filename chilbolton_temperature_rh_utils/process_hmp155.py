@@ -218,7 +218,8 @@ def process_file(infile, outdir="./", metadata_file="metadata.json", aws_7_file=
     nant.util.add_metadata_to_netcdf(nc, metadata_file)
     
     # Set processing software version from package
-    nc.setncattr("processing_software_version", __version__)
+    version_str = __version__ if __version__.startswith('v') else f"v{__version__}"
+    nc.setncattr("processing_software_version", version_str)
 
         # Ensure the 'time' variable has the correct units and values
     if "time" in nc.variables:
