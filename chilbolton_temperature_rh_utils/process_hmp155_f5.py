@@ -57,8 +57,9 @@ def preprocess_data_f5(infile):
 
     print(df)
 
-    # Load the channel database
-    chdb_file = os.path.join("./", "f5channelDB.chdb")
+    # Load the channel database from package installation directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    chdb_file = os.path.join(script_dir, "f5channelDB.chdb")
     chdb = read_format5_chdb(chdb_file)
 
     print(chdb['oatnew_ch'])
