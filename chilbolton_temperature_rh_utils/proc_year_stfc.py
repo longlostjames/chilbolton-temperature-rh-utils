@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from .process_hmp155_stfc import process_file
 from .flag_purge_times import main as flag_purge_main
+from .flag_low_temperature import flag_low_temperature
 
 
 def main():
@@ -86,8 +87,14 @@ variant) to CF-compliant NetCDF files with automated QC flagging."""
                 
                 try:
                     flag_purge_main()
-                finally:
+finally:
                     sys.argv = original_argv
+                
+                # Flag unphysically low temperatures
+                try:
+                    flag_low_temperature(str(ncfile), temp_threshold=245.0)
+                except Exception as e:
+                    print(f"Error flagging low temperatures in {ncfile}: {e}", file=sys.stderr)
                 
                 previous_ncfile = ncfile
             except Exception as e:
