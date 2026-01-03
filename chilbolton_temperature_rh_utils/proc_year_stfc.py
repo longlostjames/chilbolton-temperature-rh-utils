@@ -69,7 +69,7 @@ variant) to CF-compliant NetCDF files with automated QC flagging."""
             continue
         
         # Path to the generated NetCDF file
-        ncfile = outdir / f"stfc-temperature-rh-1_cao_{date_str}_surface-met_v1.0.nc"
+        ncfile = outdir / f"stfc-temperature-rh-1_cao_{date_str}_surface-met_v1.1.nc"
         
         # Add QC flags for purge times
         if ncfile.exists():
