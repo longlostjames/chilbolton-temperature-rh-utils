@@ -153,15 +153,17 @@ def process_file(infile, outdir="./", metadata_file="metadata_stfc.json", aws_7_
 
     file_date = f"{str(years[0])}{str(months[0]).zfill(2)}{str(days[0]).zfill(2)}"
 
+    # Read product_version from metadata file
+    import json
+    with open(metadata_file, 'r') as f:
+        metadata = json.load(f)
+    product_version = metadata.get('product_version', 'v1.0')
+
     # Create NetCDF file
-    #nc = nant.create_netcdf.main("ncas-temperature-rh-1", date=file_date, 
-    #                             dimension_lengths={"time": len(unix_times)}, 
-    #                             products="surface-met", file_location=outdir, 
-    #                             product_version="1.0")
-    
-    nc = nant.create_netcdf.make_product_netcdf("surface-met","stfc-temperature-rh-1", date=file_date, 
+    nc = nant.create_netcdf.make_product_netcdf("surface-met", "stfc-temperature-rh-1", date=file_date, 
                                  dimension_lengths={"time": len(unix_times)}, 
-                                 file_location=outdir, platform="cao")
+                                 file_location=outdir, platform="cao",
+                                 product_version=product_version)
     if isinstance(nc, list):
         print("[WARNING] Unexpectedly got multiple netCDFs returned from nant.create_netcdf.main, just using first file...")
         nc = nc[0]
