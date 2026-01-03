@@ -157,7 +157,7 @@ def process_file(infile, outdir="./", metadata_file="metadata_stfc.json", aws_7_
     import json
     with open(metadata_file, 'r') as f:
         metadata = json.load(f)
-    product_version = metadata.get('product_version', 'v1.0')
+    product_version = metadata.get('product_version', 'v1.0').lstrip('v')  # Strip 'v' as make_product_netcdf adds it
 
     # Create NetCDF file
     nc = nant.create_netcdf.make_product_netcdf("surface-met", "stfc-temperature-rh-1", date=file_date, 
