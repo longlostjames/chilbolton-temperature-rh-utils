@@ -434,16 +434,26 @@ def main():
         # Option to enable or disable purge flagging based on 8 minutes preceding an RH dip
         enable_purge_flagging_before_rh_dip = False  # Set to True to enable this behavior
     
-        # Apply RH dip flags
+        # Apply RH dip flags ONLY if there's a purge detected nearby
+        # Recovery should only be flagged after an actual purge
         for start, end in dip_intervals:
             dip_start_time = dip_time[start]
             seconds_since_midnight = (dip_start_time - dip_start_time.replace(hour=0, minute=0, second=0)).total_seconds()
     
-            allow = True if not expected_purge_windows else False
-            for expected_start, expected_end in expected_purge_windows:
-                if expected_start.total_seconds() - 900 <= seconds_since_midnight <= expected_end.total_seconds() + 900:
-                    allow = True
+            # Check if there's a purge period within 20 minutes before this dip
+            has_nearby_purge = False
+            for purge_start, purge_end in purge_periods:
+                if purge_end <= start and (start - purge_end) <= int((20 * 60) / time_diff):
+                    has_nearby_purge = True
                     break
+            
+            # Only flag recovery if there's a detected purge nearby OR if within expected windows
+            allow = has_nearby_purge
+            if not allow and expected_purge_windows:
+                for expected_start, expected_end in expected_purge_windows:
+                    if expected_start.total_seconds() - 900 <= seconds_since_midnight <= expected_end.total_seconds() + 900:
+                        allow = True
+                        break
     
             if allow:
                 if enable_purge_flagging_before_rh_dip:
