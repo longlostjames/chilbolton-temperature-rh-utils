@@ -383,14 +383,14 @@ def main():
     
         # Detect RH dips with a preceding flat region
         # Exclude dips that occur when RH is at or near saturation
-        # Use a more relaxed flat_threshold to catch more legitimate purges
+        # Use a tightened flat_threshold to reduce spurious detections
         dip_intervals = detect_rh_dips(
             ds['relative_humidity'], 
             ds['time'], 
             drop_thresh=3.0, 
             recovery_time=360, 
             flat_window=5, 
-            flat_threshold=0.5  # Relaxed from 0.1 to catch more cases
+            flat_threshold=0.2  # Tightened to reduce false positives
         )
         
         # Filter out dips where the RH before/during the dip is at or near saturation
