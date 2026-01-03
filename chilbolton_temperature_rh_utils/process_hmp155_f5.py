@@ -143,10 +143,9 @@ def process_file(infile, outdir="./", metadata_file="metadata.json", aws_7_file=
     file_date = f"{str(years[0])}{str(months[0]).zfill(2)}{str(days[0]).zfill(2)}"
 
     # Create NetCDF file
-    nc = nant.create_netcdf.main("ncas-temperature-rh-1", date=file_date, 
+    nc = nant.create_netcdf.make_product_netcdf("surface-met", "ncas-temperature-rh-1", date=file_date, 
                                  dimension_lengths={"time": len(unix_times)}, 
-                                 products="surface-met", file_location=outdir, 
-                                 product_version="1.0")
+                                 file_location=outdir, platform="cao")
     if isinstance(nc, list):
         print("[WARNING] Unexpectedly got multiple netCDFs returned from nant.create_netcdf.main, just using first file...")
         nc = nc[0]

@@ -13,7 +13,7 @@
     "sampling_interval": "10.0 second",
     "averaging_interval": "10.0 second",
     "product_name": "surface-met",
-    "product_version": "v1.0",
+    "product_version": "v1.1",
     "processing_level": {
         "value": 1,
         "type": "int"
