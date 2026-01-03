@@ -88,6 +88,13 @@ variant) to CF-compliant NetCDF files with automated QC flagging."""
                 if previous_ncfile:
                     flag_args.extend(["--previous-file", str(previous_ncfile)])
                 
+                # Check for next day's file for purge timing fallback
+                next_date = current_date + timedelta(days=1)
+                next_date_str = next_date.strftime("%Y%m%d")
+                next_ncfile = outdir / f"ncas-temperature-rh-1_cao_{next_date_str}_surface-met_v1.1.nc"
+                if next_ncfile.exists():
+                    flag_args.extend(["--next-file", str(next_ncfile)])
+                
                 # Save original sys.argv and replace it
                 original_argv = sys.argv
                 sys.argv = ["flag-hmp155-purge-times"] + flag_args
