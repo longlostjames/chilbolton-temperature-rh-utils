@@ -203,10 +203,22 @@ def main():
         window_size = int((window_minutes * 60) / time_diff)
         min_duration_samples = int((8 * 60) / time_diff)  # 8 minutes in samples
     
+        # Check if QC flags already exist (from low temperature flagging)
+        # If they do, mask out bad data (flag=2) before purge detection
+        existing_bad_data_mask = None
+        if 'qc_flag_air_temperature' in ds:
+            existing_bad_data_mask = (ds['qc_flag_air_temperature'] == 2).values
+            print(f"Found {np.sum(existing_bad_data_mask)} points already flagged as bad data (flag=2)")
+    
         # Detect low-variance periods in each variable
         purge_temp = detect_flat(ds['air_temperature'], window_size, std_threshold_temp)
         purge_rh = detect_flat(ds['relative_humidity'], window_size, std_threshold_rh)
         purge_rh = exclude_high_rh(ds['relative_humidity'], purge_rh, max_rh=99.5)
+        
+        # Exclude regions already flagged as bad data (flag=2) from purge detection
+        if existing_bad_data_mask is not None:
+            purge_temp = purge_temp & ~xr.DataArray(existing_bad_data_mask, dims=purge_temp.dims, coords=purge_temp.coords)
+            purge_rh = purge_rh & ~xr.DataArray(existing_bad_data_mask, dims=purge_rh.dims, coords=purge_rh.coords)
     
         # Use RH flatness as primary indicator (RH is the sensor being purged)
         # Temperature may also be flat during purge but RH is the key indicator

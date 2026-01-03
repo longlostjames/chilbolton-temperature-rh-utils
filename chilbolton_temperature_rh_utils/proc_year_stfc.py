@@ -75,6 +75,13 @@ variant) to CF-compliant NetCDF files with automated QC flagging."""
         # Add QC flags for purge times
         if ncfile.exists():
             try:
+                # Flag unphysically low temperatures FIRST
+                # This ensures purge detection only runs on valid data
+                try:
+                    flag_low_temperature(str(ncfile), temp_threshold=245.0)
+                except Exception as e:
+                    print(f"Error flagging low temperatures in {ncfile}: {e}", file=sys.stderr)
+                
                 # Build arguments for flag_purge_main
                 flag_args = [str(ncfile)]
                 
@@ -87,16 +94,8 @@ variant) to CF-compliant NetCDF files with automated QC flagging."""
                 
                 try:
                     flag_purge_main()
-finally:
-                    sys.argv = original_argv
-                
-                # Flag unphysically low temperatures
-                try:
-                    flag_low_temperature(str(ncfile), temp_threshold=245.0)
-                except Exception as e:
-                    print(f"Error flagging low temperatures in {ncfile}: {e}", file=sys.stderr)
-                
-                previous_ncfile = ncfile
+                finally:
+                    sys.argv = original_argv                previous_ncfile = ncfile
             except Exception as e:
                 print(f"Error flagging {ncfile}: {e}", file=sys.stderr)
         else:
