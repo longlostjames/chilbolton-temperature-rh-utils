@@ -169,6 +169,8 @@ def main():
                         help='Standard deviation threshold for temperature (default: 0.03)')
     parser.add_argument('--std-threshold-rh', type=float, default=0.02,
                         help='Standard deviation threshold for RH (default: 0.02)')
+    parser.add_argument('--exclude-times', action='store_true',
+                        help='Exclude purges at certain times of day (midnight 23:00-02:00, evening 17:00-20:00)')
 
     args = parser.parse_args()
     
@@ -179,6 +181,7 @@ def main():
     window_minutes = args.window_minutes
     std_threshold_temp = args.std_threshold_temp
     std_threshold_rh = args.std_threshold_rh
+    exclude_times = args.exclude_times
 
     # Define QC flags
     flag_good = 1
@@ -252,15 +255,16 @@ def main():
             purge_periods_with_std.append((start, end, rh_std, temp_std, period_time))
     
         # Filter out periods around midnight (23:00-02:00) and evening (17:00-20:00) as these are likely not purge cycles
+        # This filtering is optional and controlled by exclude_times parameter
         filtered_periods = []
         for start, end, rh_std, temp_std, period_time in purge_periods_with_std:
             hour = period_time.hour
-            # Exclude periods around midnight (23:00-02:00) and evening (17:00-20:00)
-            # Purges typically occur during morning/midday hours (8:00-14:00)
-            if not ((hour >= 23 or hour <= 2) or (17 <= hour < 20) or hour < 6):
-                # Score primarily by RH flatness (it's the sensor being purged)
-                combined_score = rh_std * 100 + temp_std  # Weight RH much more heavily
-                filtered_periods.append((start, end, rh_std, temp_std, period_time, combined_score))
+            # Optionally exclude periods around midnight (23:00-02:00) and evening (17:00-20:00)
+            if exclude_times and ((hour >= 23 or hour <= 2) or (17 <= hour < 20)):
+                continue  # Skip this period
+            # Score primarily by RH flatness (it's the sensor being purged)
+            combined_score = rh_std * 100 + temp_std  # Weight RH much more heavily
+            filtered_periods.append((start, end, rh_std, temp_std, period_time, combined_score))
         
         # If no valid periods after filtering, fall back to all periods
         if not filtered_periods:
@@ -378,14 +382,26 @@ def main():
                         qc_rh[i] = flag_rh_dip  # Use flag 4 for RH recovery
     
         # Detect RH dips with a preceding flat region
+        # Exclude dips that occur when RH is at or near saturation
+        # Use a more relaxed flat_threshold to catch more legitimate purges
         dip_intervals = detect_rh_dips(
             ds['relative_humidity'], 
             ds['time'], 
             drop_thresh=3.0, 
             recovery_time=360, 
             flat_window=5, 
-            flat_threshold=0.1
+            flat_threshold=0.5  # Relaxed from 0.1 to catch more cases
         )
+        
+        # Filter out dips where the RH before/during the dip is at or near saturation
+        # Check both the start point and the preceding 10 samples
+        filtered_dip_intervals = []
+        for start, end in dip_intervals:
+            lookback = max(0, start - 10)
+            max_rh_before = ds['relative_humidity'][lookback:start+1].max().values
+            if max_rh_before < 97.0:  # Only flag dips well below saturation
+                filtered_dip_intervals.append((start, end))
+        dip_intervals = filtered_dip_intervals
     
        # --- Flag RH dips only during expected purge windows (from previous day) ---
         buffer_samples = int((8 * 60) / time_diff)  # 8 minutes in samples
