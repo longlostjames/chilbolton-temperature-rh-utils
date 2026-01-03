@@ -48,6 +48,7 @@ def flag_low_temperature(nc_file, temp_threshold=245):
         low_temp_mask = air_temperature < temp_threshold
 
         # Apply QC flag 2 to air_temperature and relative_humidity for those points
+        # This will override any existing flags (good, purge, recovery, etc.)
         qc_flag_air_temp[low_temp_mask] = FLAG_BAD
         qc_flag_rh[low_temp_mask] = FLAG_BAD
 
