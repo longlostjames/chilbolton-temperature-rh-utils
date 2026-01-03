@@ -346,9 +346,15 @@ def main():
             except Exception as e:
                 print(f"Warning: Could not use previous day's purge timing: {e}")
     
-        # Initialize QC flags as 1 (good_data)
-        qc_temp = xr.full_like(ds['air_temperature'], fill_value=flag_good, dtype=np.int8)
-        qc_rh = xr.full_like(ds['relative_humidity'], fill_value=flag_good, dtype=np.int8)
+        # Initialize QC flags as 1 (good_data), but preserve existing flag=2 (bad data) if present
+        if existing_bad_data_mask is not None:
+            qc_temp = xr.where(xr.DataArray(existing_bad_data_mask, dims=ds['air_temperature'].dims, coords=ds['air_temperature'].coords),
+                              2, flag_good).astype(np.int8)
+            qc_rh = xr.where(xr.DataArray(existing_bad_data_mask, dims=ds['relative_humidity'].dims, coords=ds['relative_humidity'].coords),
+                            2, flag_good).astype(np.int8)
+        else:
+            qc_temp = xr.full_like(ds['air_temperature'], fill_value=flag_good, dtype=np.int8)
+            qc_rh = xr.full_like(ds['relative_humidity'], fill_value=flag_good, dtype=np.int8)
     
         # Apply purge flag (3) for each purge period
         for start, end in purge_periods:
@@ -361,12 +367,15 @@ def main():
             qc_rh[start:end] = flag_purge
     
             # Flag 6 minutes after each purge period as 4 (only if recovery period is within data range)
+            # But do NOT overwrite bad data (flag=2)
             recovery_start = end
             recovery_end = min(len(qc_rh), end + int((6 * 60) / time_diff))  # 6 minutes in samples
             
-            # Only flag recovery if it's within the actual data range
+            # Only flag recovery if it's within the actual data range and not already bad data
             if recovery_start < len(qc_rh) and recovery_end > recovery_start:
-                qc_rh[recovery_start:recovery_end] = flag_rh_dip  # Use flag 4 for RH recovery
+                for i in range(recovery_start, recovery_end):
+                    if qc_rh[i] != 2:  # Don't overwrite bad data flags
+                        qc_rh[i] = flag_rh_dip  # Use flag 4 for RH recovery
     
         # Detect RH dips with a preceding flat region
         dip_intervals = detect_rh_dips(
@@ -423,13 +432,19 @@ def main():
             if allow:
                 if enable_purge_flagging_before_rh_dip:
                     # Optionally flag the 8 minutes preceding the RH dip as purge
+                    # But do NOT overwrite bad data (flag=2)
                     purge_start = max(0, start - buffer_samples)
                     purge_end = max(purge_start, start)
-                    qc_temp[purge_start:purge_end] = flag_purge
-                    qc_rh[purge_start:purge_end] = flag_purge
+                    for i in range(purge_start, purge_end):
+                        if qc_temp[i] != 2:
+                            qc_temp[i] = flag_purge
+                        if qc_rh[i] != 2:
+                            qc_rh[i] = flag_purge
     
-                # Flag the RH dip itself
-                qc_rh[start + 1:end] = flag_rh_dip  # Skip dip initiation point
+                # Flag the RH dip itself (recovery), but do NOT overwrite bad data (flag=2)
+                for i in range(start + 1, end):
+                    if qc_rh[i] != 2:  # Skip dip initiation point and preserve bad data
+                        qc_rh[i] = flag_rh_dip
     
         # Assign QC variables
         ds['qc_flag_air_temperature'] = qc_temp
