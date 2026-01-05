@@ -159,6 +159,8 @@ def main():
     parser.add_argument('filename', type=str, help='Path to the NetCDF file')
     parser.add_argument('--previous-file', type=str, default=None,
                         help='Path to the previous day NetCDF file for RH dip flagging context')
+    parser.add_argument('--next-file', type=str, default=None,
+                        help='Path to the next day NetCDF file for purge timing context')
     parser.add_argument('--corr-file-temperature', type=str, default=None,
                         help='Path to the correction file for bad air temperature intervals')
     parser.add_argument('--corr-file-rh', type=str, default=None,
@@ -167,8 +169,8 @@ def main():
                         help='Rolling window size in minutes (default: 8)')
     parser.add_argument('--std-threshold-temp', type=float, default=0.03,
                         help='Standard deviation threshold for temperature (default: 0.03)')
-    parser.add_argument('--std-threshold-rh', type=float, default=0.02,
-                        help='Standard deviation threshold for RH (default: 0.02)')
+    parser.add_argument('--std-threshold-rh', type=float, default=0.05,
+                        help='Standard deviation threshold for RH (default: 0.05)')
     parser.add_argument('--exclude-times', action='store_true',
                         help='Exclude purges at certain times of day (midnight 23:00-02:00, evening 17:00-20:00)')
 
@@ -176,6 +178,7 @@ def main():
     
     filename = args.filename
     previous_filename = args.previous_file
+    next_filename = args.next_file
     corr_file_temperature = args.corr_file_temperature
     corr_file_rh = args.corr_file_rh
     window_minutes = args.window_minutes
@@ -304,7 +307,8 @@ def main():
                 if earlier_start >= 0:  # Ensure the indices are within bounds
                     purge_periods.append((earlier_start, earlier_end))
     
-        # If no purge periods were detected and we have a previous file, use previous day's timing
+        # If no purge periods were detected, try to use previous day's timing first
+        # If previous day also had no purges, then try next day's timing
         if len(purge_periods) == 0 and previous_filename:
             try:
                 with xr.open_dataset(previous_filename, mode='r') as prev_ds:
@@ -349,6 +353,52 @@ def main():
                                 print(f"Applied previous day's purge timing: {current_start.strftime('%H:%M')} - {current_end.strftime('%H:%M')}")
             except Exception as e:
                 print(f"Warning: Could not use previous day's purge timing: {e}")
+        
+        # If still no purges and previous day also had no purges, try next day
+        if len(purge_periods) == 0 and next_filename:
+            try:
+                with xr.open_dataset(next_filename, mode='r') as next_ds:
+                    next_ds = next_ds.sortby('time')
+                    next_time = pd.to_datetime(next_ds['time'].values)
+                    
+                    # Find purge periods in next day based on QC flags
+                    if 'qc_flag_relative_humidity' in next_ds:
+                        next_purge_mask = (next_ds['qc_flag_relative_humidity'] == 3).values
+                        next_start = None
+                        next_purge_times = []
+                        
+                        for i, val in enumerate(next_purge_mask):
+                            if val and next_start is None:
+                                next_start = next_time[i]
+                            elif not val and next_start is not None:
+                                next_end = next_time[i - 1]
+                                next_purge_times.append((next_start, next_end))
+                                next_start = None
+                        if next_start is not None:
+                            next_purge_times.append((next_start, next_time[-1]))
+                        
+                        # Apply same time-of-day to current day
+                        current_time = pd.to_datetime(ds['time'].values)
+                        current_date = current_time[0].date()
+                        
+                        for next_start, next_end in next_purge_times:
+                            # Get time of day from next day's purge
+                            start_time_of_day = next_start.time()
+                            end_time_of_day = next_end.time()
+                            
+                            # Apply to current day
+                            current_start = pd.Timestamp.combine(current_date, start_time_of_day)
+                            current_end = pd.Timestamp.combine(current_date, end_time_of_day)
+                            
+                            # Find indices in current day's data
+                            start_idx = np.argmin(np.abs((current_time - current_start).total_seconds()))
+                            end_idx = np.argmin(np.abs((current_time - current_end).total_seconds()))
+                            
+                            if start_idx < len(current_time) and end_idx < len(current_time):
+                                purge_periods.append((start_idx, end_idx))
+                                print(f"Applied next day's purge timing: {current_start.strftime('%H:%M')} - {current_end.strftime('%H:%M')}")
+            except Exception as e:
+                print(f"Warning: Could not use next day's purge timing: {e}")
     
         # Initialize QC flags as 1 (good_data), but preserve existing flag=2 (bad data) if present
         if existing_bad_data_mask is not None:

@@ -102,7 +102,9 @@ variant) to CF-compliant NetCDF files with automated QC flagging."""
                 try:
                     flag_purge_main()
                 finally:
-                    sys.argv = original_argv                previous_ncfile = ncfile
+                    sys.argv = original_argv
+                
+                previous_ncfile = ncfile
             except Exception as e:
                 print(f"Error flagging {ncfile}: {e}", file=sys.stderr)
         else:
