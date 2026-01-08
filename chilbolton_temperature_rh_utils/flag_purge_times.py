@@ -239,14 +239,16 @@ def main():
             if val and start is None:
                 start = i
             elif not val and start is not None:
-                # Expand the purge region to ensure it lasts at least 8 minutes
-                expanded_start = max(0, start - min_duration_samples // 2)
-                expanded_end = min(len(purge_mask), i + min_duration_samples // 2)
+                # Always flag exactly 8 minutes, measured backward from end of flat region
+                # This ensures consistency and avoids including pre-purge data
+                expanded_start = max(0, i - min_duration_samples)
+                expanded_end = i
                 purge_periods.append((expanded_start, expanded_end))
                 start = None
         if start is not None:
-            expanded_start = max(0, start - min_duration_samples // 2)
-            expanded_end = min(len(purge_mask), len(purge_mask))
+            # Always flag exactly 8 minutes, measured backward from end of flat region
+            expanded_start = max(0, len(purge_mask) - min_duration_samples)
+            expanded_end = len(purge_mask)
             purge_periods.append((expanded_start, expanded_end))
     
         # Calculate the standard deviation of RH for each purge period
