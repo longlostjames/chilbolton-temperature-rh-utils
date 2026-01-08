@@ -6,6 +6,7 @@ import argparse
 from netCDF4 import Dataset
 import pandas as pd
 from datetime import datetime
+import shutil
 
 
 def detect_flat(data, window, threshold):
@@ -238,14 +239,28 @@ def main():
             if val and start is None:
                 start = i
             elif not val and start is not None:
-                # Expand the purge region to ensure it lasts at least 8 minutes
-                expanded_start = max(0, start - min_duration_samples // 2)
-                expanded_end = min(len(purge_mask), i + min_duration_samples // 2)
+                # Only expand the purge region if it's shorter than the minimum duration
+                duration = i - start
+                if duration < min_duration_samples:
+                    # Expand symmetrically to reach minimum duration
+                    expansion_needed = min_duration_samples - duration
+                    expanded_start = max(0, start - expansion_needed // 2)
+                    expanded_end = min(len(purge_mask), i + expansion_needed // 2)
+                else:
+                    # Period is already long enough, don't expand
+                    expanded_start = start
+                    expanded_end = i
                 purge_periods.append((expanded_start, expanded_end))
                 start = None
         if start is not None:
-            expanded_start = max(0, start - min_duration_samples // 2)
-            expanded_end = min(len(purge_mask), len(purge_mask))
+            duration = len(purge_mask) - start
+            if duration < min_duration_samples:
+                expansion_needed = min_duration_samples - duration
+                expanded_start = max(0, start - expansion_needed // 2)
+                expanded_end = len(purge_mask)
+            else:
+                expanded_start = start
+                expanded_end = len(purge_mask)
             purge_periods.append((expanded_start, expanded_end))
     
         # Calculate the standard deviation of RH for each purge period
@@ -307,9 +322,10 @@ def main():
                 if earlier_start >= 0:  # Ensure the indices are within bounds
                     purge_periods.append((earlier_start, earlier_end))
     
-        # If no purge periods were detected, try to use previous day's timing first
-        # If previous day also had no purges, then try next day's timing
-        if len(purge_periods) == 0 and previous_filename:
+        # Check previous day to see if we're missing any purge periods
+        # Use previous day's timing as a template to fill in missing purges
+        if previous_filename:
+            prev_purge_count = 0
             try:
                 with xr.open_dataset(previous_filename, mode='r') as prev_ds:
                     prev_ds = prev_ds.sortby('time')
@@ -331,26 +347,42 @@ def main():
                         if prev_start is not None:
                             prev_purge_times.append((prev_start, prev_time[-1]))
                         
-                        # Apply same time-of-day to current day
-                        current_time = pd.to_datetime(ds['time'].values)
-                        current_date = current_time[0].date()
+                        prev_purge_count = len(prev_purge_times)
                         
-                        for prev_start, prev_end in prev_purge_times:
-                            # Get time of day from previous purge
-                            start_time_of_day = prev_start.time()
-                            end_time_of_day = prev_end.time()
+                        # If we found fewer purge periods than previous day had, use previous day's timing
+                        if len(purge_periods) < prev_purge_count:
+                            print(f"Found {len(purge_periods)} purge period(s), but previous day had {prev_purge_count}. Using previous day's timing.")
                             
-                            # Apply to current day
-                            current_start = pd.Timestamp.combine(current_date, start_time_of_day)
-                            current_end = pd.Timestamp.combine(current_date, end_time_of_day)
+                            # Extract date from filename (handles both single-day and multi-day files)
+                            import re
+                            date_match = re.search(r'_(\d{8})_', filename)
+                            if date_match:
+                                date_str = date_match.group(1)
+                                current_date = pd.to_datetime(date_str).date()
+                            else:
+                                # Fall back to using last time point if filename doesn't have date
+                                current_time_temp = pd.to_datetime(ds['time'].values)
+                                current_date = current_time_temp[-1].date()
                             
-                            # Find indices in current day's data
-                            start_idx = np.argmin(np.abs((current_time - current_start).total_seconds()))
-                            end_idx = np.argmin(np.abs((current_time - current_end).total_seconds()))
+                            current_time = pd.to_datetime(ds['time'].values)
+                            purge_periods = []  # Clear detected periods and use previous day's timing
                             
-                            if start_idx < len(current_time) and end_idx < len(current_time):
-                                purge_periods.append((start_idx, end_idx))
-                                print(f"Applied previous day's purge timing: {current_start.strftime('%H:%M')} - {current_end.strftime('%H:%M')}")
+                            for prev_start, prev_end in prev_purge_times:
+                                # Get time of day from previous purge
+                                start_time_of_day = prev_start.time()
+                                end_time_of_day = prev_end.time()
+                                
+                                # Apply to current day
+                                current_start = pd.Timestamp.combine(current_date, start_time_of_day)
+                                current_end = pd.Timestamp.combine(current_date, end_time_of_day)
+                                
+                                # Find indices in current day's data
+                                start_idx = np.argmin(np.abs((current_time - current_start).total_seconds()))
+                                end_idx = np.argmin(np.abs((current_time - current_end).total_seconds()))
+                                
+                                if start_idx < len(current_time) and end_idx < len(current_time):
+                                    purge_periods.append((start_idx, end_idx))
+                                    print(f"Applied previous day's purge timing: {current_start.strftime('%H:%M')} - {current_end.strftime('%H:%M')}")
             except Exception as e:
                 print(f"Warning: Could not use previous day's purge timing: {e}")
         
@@ -378,8 +410,18 @@ def main():
                             next_purge_times.append((next_start, next_time[-1]))
                         
                         # Apply same time-of-day to current day
+                        # Extract date from filename (handles both single-day and multi-day files)
+                        import re
+                        date_match = re.search(r'_(\\d{8})_', filename)
+                        if date_match:
+                            date_str = date_match.group(1)
+                            current_date = pd.to_datetime(date_str).date()
+                        else:
+                            # Fall back to using last time point if filename doesn't have date
+                            current_time_temp = pd.to_datetime(ds['time'].values)
+                            current_date = current_time_temp[-1].date()
+                        
                         current_time = pd.to_datetime(ds['time'].values)
-                        current_date = current_time[0].date()
                         
                         for next_start, next_end in next_purge_times:
                             # Get time of day from next day's purge
@@ -552,9 +594,16 @@ def main():
             print(f"Flagging bad data intervals for relative humidity from {corr_file_rh}")
             flag_bad_data_xr(ds, bad_intervals_rh, "qc_flag_relative_humidity")
     
-        # Save changes to the file
-        ds.to_netcdf(filename, mode='a')  # Append mode ensures updates are written
-        print(f"QC flags successfully added to {filename}.")
+        # Save changes using netCDF4 for in-place modification
+        # First, write to a temporary file
+        temp_filename = filename + '.tmp'
+        ds.to_netcdf(temp_filename)
+        # Close xarray dataset
+        # (it will be closed automatically when exiting the with block)
+        
+    # Move temp file to replace original
+    shutil.move(temp_filename, filename)
+    print(f"QC flags successfully added to {filename}.")
     
     # Reopen the file with netCDF4 and set the time units
     set_time_units_to_seconds_since_epoch(filename)
