@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from .process_hmp155_stfc import process_file
 from .flag_purge_times import main as flag_purge_main
 from .flag_low_temperature import flag_low_temperature
+from .fix_isolated_recovery_flags import fix_isolated_recovery_flags
 
 
 def main():
@@ -103,6 +104,12 @@ variant) to CF-compliant NetCDF files with automated QC flagging."""
                     flag_purge_main()
                 finally:
                     sys.argv = original_argv
+                
+                # Fix any isolated recovery flags (flag=4 without nearby flag=3)
+                try:
+                    fix_isolated_recovery_flags(str(ncfile), dry_run=False)
+                except Exception as e:
+                    print(f"Error fixing isolated recovery flags in {ncfile}: {e}", file=sys.stderr)
                 
                 previous_ncfile = ncfile
             except Exception as e:

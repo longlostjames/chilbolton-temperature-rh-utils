@@ -239,28 +239,14 @@ def main():
             if val and start is None:
                 start = i
             elif not val and start is not None:
-                # Only expand the purge region if it's shorter than the minimum duration
-                duration = i - start
-                if duration < min_duration_samples:
-                    # Expand symmetrically to reach minimum duration
-                    expansion_needed = min_duration_samples - duration
-                    expanded_start = max(0, start - expansion_needed // 2)
-                    expanded_end = min(len(purge_mask), i + expansion_needed // 2)
-                else:
-                    # Period is already long enough, don't expand
-                    expanded_start = start
-                    expanded_end = i
+                # Expand the purge region to ensure it lasts at least 8 minutes
+                expanded_start = max(0, start - min_duration_samples // 2)
+                expanded_end = min(len(purge_mask), i + min_duration_samples // 2)
                 purge_periods.append((expanded_start, expanded_end))
                 start = None
         if start is not None:
-            duration = len(purge_mask) - start
-            if duration < min_duration_samples:
-                expansion_needed = min_duration_samples - duration
-                expanded_start = max(0, start - expansion_needed // 2)
-                expanded_end = len(purge_mask)
-            else:
-                expanded_start = start
-                expanded_end = len(purge_mask)
+            expanded_start = max(0, start - min_duration_samples // 2)
+            expanded_end = min(len(purge_mask), len(purge_mask))
             purge_periods.append((expanded_start, expanded_end))
     
         # Calculate the standard deviation of RH for each purge period
