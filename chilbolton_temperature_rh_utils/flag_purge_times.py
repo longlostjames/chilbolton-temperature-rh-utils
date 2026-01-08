@@ -209,6 +209,7 @@ def main():
         time_diff = np.median(np.diff(ds['time'].values).astype('timedelta64[s]').astype(int))
         window_size = int((window_minutes * 60) / time_diff)
         min_duration_samples = int((8 * 60) / time_diff)  # 8 minutes in samples
+        max_duration_samples = int((20 * 60) / time_diff)  # 20 minutes maximum duration
     
         # Check if QC flags already exist (from low temperature flagging)
         # If they do, mask out bad data (flag=2) before purge detection
@@ -239,14 +240,41 @@ def main():
             if val and start is None:
                 start = i
             elif not val and start is not None:
-                # Expand the purge region to ensure it lasts at least 8 minutes
-                expanded_start = max(0, start - min_duration_samples // 2)
-                expanded_end = min(len(purge_mask), i + min_duration_samples // 2)
+                # Measure backward from end of flat region with maximum duration limit
+                # This captures the actual purge cycle without pre-purge data
+                flat_duration = i - start
+                
+                # Cap the duration at max_duration_samples, measuring backward from the end
+                if flat_duration > max_duration_samples:
+                    expanded_start = i - max_duration_samples
+                    expanded_end = i
+                elif flat_duration < min_duration_samples:
+                    # If too short, expand backward to reach minimum duration
+                    expanded_start = max(0, i - min_duration_samples)
+                    expanded_end = i
+                else:
+                    # Duration is within acceptable range, use as-is
+                    expanded_start = start
+                    expanded_end = i
+                    
                 purge_periods.append((expanded_start, expanded_end))
                 start = None
         if start is not None:
-            expanded_start = max(0, start - min_duration_samples // 2)
-            expanded_end = min(len(purge_mask), len(purge_mask))
+            flat_duration = len(purge_mask) - start
+            
+            # Cap the duration at max_duration_samples, measuring backward from the end
+            if flat_duration > max_duration_samples:
+                expanded_start = len(purge_mask) - max_duration_samples
+                expanded_end = len(purge_mask)
+            elif flat_duration < min_duration_samples:
+                # If too short, expand backward to reach minimum duration
+                expanded_start = max(0, len(purge_mask) - min_duration_samples)
+                expanded_end = len(purge_mask)
+            else:
+                # Duration is within acceptable range, use as-is
+                expanded_start = start
+                expanded_end = len(purge_mask)
+                
             purge_periods.append((expanded_start, expanded_end))
     
         # Calculate the standard deviation of RH for each purge period
