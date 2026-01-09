@@ -239,50 +239,35 @@ def main():
             if val and start is None:
                 start = i
             elif not val and start is not None:
-                # Start with 8-minute window centered on detected flat region
-                flat_center = (start + i) // 2
-                expanded_start = max(0, flat_center - min_duration_samples // 2)
-                expanded_end = min(len(purge_mask), flat_center + min_duration_samples // 2)
+                # With center=True rolling window, detected boundaries are already well-aligned
+                # Just ensure we flag at least 8 minutes
+                flat_duration = i - start
                 
-                # Verify the expanded region is actually flat by checking std dev
-                rh_std_expanded = ds['relative_humidity'][expanded_start:expanded_end].std().item()
-                
-                # If expanded region isn't flat enough, shrink back toward the center
-                if rh_std_expanded > std_threshold_rh * 2:  # Allow some tolerance
-                    # Use detected flat region instead, but ensure minimum 8 minutes
-                    flat_duration = i - start
-                    if flat_duration >= min_duration_samples:
-                        expanded_start = start
-                        expanded_end = i
-                    else:
-                        # Expand minimally to reach 8 minutes, staying within flat region
-                        deficit = min_duration_samples - flat_duration
-                        expanded_start = max(0, start - deficit // 2)
-                        expanded_end = min(len(purge_mask), i + deficit // 2)
+                if flat_duration >= min_duration_samples:
+                    # Detected region is long enough, use as-is
+                    expanded_start = start
+                    expanded_end = i
+                else:
+                    # Expand symmetrically to reach 8 minutes
+                    deficit = min_duration_samples - flat_duration
+                    expanded_start = max(0, start - deficit // 2)
+                    expanded_end = min(len(purge_mask), i + deficit // 2)
                 
                 purge_periods.append((expanded_start, expanded_end))
                 start = None
         if start is not None:
-            # Start with 8-minute window centered on detected flat region
-            flat_center = (start + len(purge_mask)) // 2
-            expanded_start = max(0, flat_center - min_duration_samples // 2)
-            expanded_end = min(len(purge_mask), flat_center + min_duration_samples // 2)
+            # With center=True rolling window, detected boundaries are already well-aligned
+            flat_duration = len(purge_mask) - start
             
-            # Verify the expanded region is actually flat by checking std dev
-            rh_std_expanded = ds['relative_humidity'][expanded_start:expanded_end].std().item()
-            
-            # If expanded region isn't flat enough, shrink back toward the center
-            if rh_std_expanded > std_threshold_rh * 2:  # Allow some tolerance
-                # Use detected flat region instead, but ensure minimum 8 minutes
-                flat_duration = len(purge_mask) - start
-                if flat_duration >= min_duration_samples:
-                    expanded_start = start
-                    expanded_end = len(purge_mask)
-                else:
-                    # Expand minimally to reach 8 minutes, staying within flat region
-                    deficit = min_duration_samples - flat_duration
-                    expanded_start = max(0, start - deficit // 2)
-                    expanded_end = len(purge_mask)
+            if flat_duration >= min_duration_samples:
+                # Detected region is long enough, use as-is
+                expanded_start = start
+                expanded_end = len(purge_mask)
+            else:
+                # Expand symmetrically to reach 8 minutes
+                deficit = min_duration_samples - flat_duration
+                expanded_start = max(0, start - deficit // 2)
+                expanded_end = len(purge_mask)
             
             purge_periods.append((expanded_start, expanded_end))
     
