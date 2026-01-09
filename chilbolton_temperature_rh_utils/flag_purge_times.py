@@ -170,8 +170,8 @@ def main():
                         help='Rolling window size in minutes (default: 8)')
     parser.add_argument('--std-threshold-temp', type=float, default=0.03,
                         help='Standard deviation threshold for temperature (default: 0.03)')
-    parser.add_argument('--std-threshold-rh', type=float, default=0.05,
-                        help='Standard deviation threshold for RH (default: 0.05)')
+    parser.add_argument('--std-threshold-rh', type=float, default=0.03,
+                        help='Standard deviation threshold for RH (default: 0.03)')
     parser.add_argument('--exclude-times', action='store_true',
                         help='Exclude purges at certain times of day (midnight 23:00-02:00, evening 17:00-20:00)')
 
