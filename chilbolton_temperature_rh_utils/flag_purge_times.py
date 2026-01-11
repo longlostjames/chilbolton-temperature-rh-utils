@@ -28,6 +28,101 @@ def detect_flat(data, window, threshold):
     return flat_points
 
 
+def extend_purge_regions(qc_rh, rh_data, window_size, std_threshold, time_diff, flag_purge=3, flag_recovery=4, flag_good=1):
+    """
+    Extend purge regions to cover all contiguous flat periods.
+    
+    Purge = flat/stable period where RH has very low variability.
+    This extends purge flags forward and backward to cover all flat regions.
+    
+    Parameters:
+        qc_rh (xarray.DataArray): QC flags for relative humidity.
+        rh_data (xarray.DataArray): The relative humidity data.
+        window_size (int): Rolling window size for flatness detection.
+        std_threshold (float): Standard deviation threshold for flatness.
+        time_diff (float): Sampling interval in seconds.
+        flag_purge (int): Flag value for purge (default: 3).
+        flag_recovery (int): Flag value for recovery (default: 4).
+        flag_good (int): Flag value for good data (default: 1).
+    
+    Returns:
+        xarray.DataArray: Adjusted QC flags with extended purge regions.
+    """
+    qc_adjusted = qc_rh.copy()
+    qc_mask = qc_adjusted.values
+    rh_values = rh_data.values
+    
+    # Use a 20-second window for extension to better capture boundary points
+    # The large 8-minute window misses flat points at boundaries
+    extension_window = int((20) / time_diff)  # 20 seconds for extension checks
+    flat_mask = detect_flat(rh_data, extension_window, std_threshold).values
+    
+    # Find all purge periods
+    purge_mask = (qc_rh == flag_purge).values
+    start = None
+    purge_periods = []
+    
+    for i, val in enumerate(purge_mask):
+        if val and start is None:
+            start = i
+        elif not val and start is not None:
+            purge_periods.append((start, i))
+            start = None
+    if start is not None:
+        purge_periods.append((start, len(purge_mask)))
+    
+    # Extend each purge period forward and backward to cover all flat regions
+    # But limit total duration to avoid excessive extension
+    for purge_start, purge_end in purge_periods:
+        if purge_end >= len(rh_values):
+            continue
+        
+        original_duration = purge_end - purge_start
+        max_allowed_duration = original_duration + int(90 / time_diff)  # Allow up to 90 seconds extra
+        
+        # Extend forward while data remains flat, up to 30 seconds extra
+        extend_forward = purge_end
+        max_extension = min(len(rh_values), purge_end + 200)  # Up to 200 samples forward
+        
+        for i in range(purge_end, max_extension):
+            # Check if we've exceeded the maximum allowed duration
+            if (i - purge_start) >= max_allowed_duration:
+                break
+                
+            # Stop if we hit bad data
+            if qc_mask[i] == 2:
+                break
+            
+            # If data is flat, extend
+            if flat_mask[i]:
+                extend_forward = i + 1
+            else:
+                # Not flat anymore, stop
+                break
+        
+        # Extend backward while data remains flat
+        extend_backward = purge_start
+        min_extension = max(0, purge_start - 100)
+        
+        for i in range(purge_start - 1, min_extension - 1, -1):
+            # Stop if we hit bad data
+            if qc_mask[i] == 2:
+                break
+            
+            # If data is flat, extend
+            if flat_mask[i]:
+                extend_backward = i
+            else:
+                # Not flat anymore, stop
+                break
+        
+        # Apply the extension
+        if extend_forward > purge_end or extend_backward < purge_start:
+            qc_adjusted[extend_backward:extend_forward] = flag_purge
+    
+    return qc_adjusted
+
+
 def detect_rh_dips(rh_data, time_data, drop_thresh=3.0, recovery_time=360, flat_window=5, flat_threshold=0.1):
     """
     Detect sharp RH dips followed by recovery, only if there is a preceding flat region.
@@ -207,8 +302,12 @@ def main():
     
         # Estimate sampling interval and rolling window size
         time_diff = np.median(np.diff(ds['time'].values).astype('timedelta64[s]').astype(int))
-        window_size = int((window_minutes * 60) / time_diff)
-        min_duration_samples = int((8 * 60) / time_diff)  # 8 minutes in samples
+        # Use an 8-minute window for initial flatness detection
+        # This ensures we detect sustained flat periods characteristic of purge cycles
+        detection_window_minutes = 8  # 8-minute window for purge detection
+        window_size = int((detection_window_minutes * 60) / time_diff)
+        min_duration_samples = int((8 * 60) / time_diff)  # 8 minutes minimum
+        max_duration_samples = int((9 * 60) / time_diff)  # Can extend to 9 minutes
     
         # Check if QC flags already exist (from low temperature flagging)
         # If they do, mask out bad data (flag=2) before purge detection
@@ -231,6 +330,10 @@ def main():
         # Temperature may also be flat during purge but RH is the key indicator
         combined_purge = purge_rh
     
+        # Shift forward to account for centered rolling window capturing transition period
+        # Shift start times forward by about 30 seconds to better align with actual flat region
+        shift_samples = int((30) / time_diff)  # 30 seconds forward shift
+    
         # Identify distinct purge periods
         purge_periods = []
         purge_mask = combined_purge.values
@@ -239,34 +342,40 @@ def main():
             if val and start is None:
                 start = i
             elif not val and start is not None:
+                # Shift start forward to skip transition period
+                shifted_start = min(start + shift_samples, i - 1)
+                
                 # With center=True rolling window, detected boundaries are already well-aligned
                 # Just ensure we flag at least 8 minutes
-                flat_duration = i - start
+                flat_duration = i - shifted_start
                 
                 if flat_duration >= min_duration_samples:
-                    # Detected region is long enough, use as-is
-                    expanded_start = start
+                    # Detected region is long enough, use shifted start
+                    expanded_start = shifted_start
                     expanded_end = i
                 else:
                     # Expand symmetrically to reach 8 minutes
                     deficit = min_duration_samples - flat_duration
-                    expanded_start = max(0, start - deficit // 2)
+                    expanded_start = max(0, shifted_start - deficit // 2)
                     expanded_end = min(len(purge_mask), i + deficit // 2)
                 
                 purge_periods.append((expanded_start, expanded_end))
                 start = None
         if start is not None:
+            # Shift start forward to skip transition period
+            shifted_start = start + shift_samples
+            
             # With center=True rolling window, detected boundaries are already well-aligned
-            flat_duration = len(purge_mask) - start
+            flat_duration = len(purge_mask) - shifted_start
             
             if flat_duration >= min_duration_samples:
-                # Detected region is long enough, use as-is
-                expanded_start = start
+                # Detected region is long enough, use shifted start
+                expanded_start = shifted_start
                 expanded_end = len(purge_mask)
             else:
                 # Expand symmetrically to reach 8 minutes
                 deficit = min_duration_samples - flat_duration
-                expanded_start = max(0, start - deficit // 2)
+                expanded_start = max(0, shifted_start - deficit // 2)
                 expanded_end = len(purge_mask)
             
             purge_periods.append((expanded_start, expanded_end))
@@ -470,17 +579,6 @@ def main():
             qc_temp[start:end] = flag_purge
             qc_rh[start:end] = flag_purge
     
-            # Flag 6 minutes after each purge period as 4 (only if recovery period is within data range)
-            # But do NOT overwrite bad data (flag=2)
-            recovery_start = end
-            recovery_end = min(len(qc_rh), end + int((6 * 60) / time_diff))  # 6 minutes in samples
-            
-            # Only flag recovery if it's within the actual data range and not already bad data
-            if recovery_start < len(qc_rh) and recovery_end > recovery_start:
-                for i in range(recovery_start, recovery_end):
-                    if qc_rh[i] != 2:  # Don't overwrite bad data flags
-                        qc_rh[i] = flag_rh_dip  # Use flag 4 for RH recovery
-    
         # Detect RH dips with a preceding flat region
         # Exclude dips that occur when RH is at or near saturation
         # Use a tightened flat_threshold to reduce spurious detections
@@ -571,6 +669,56 @@ def main():
                 for i in range(start + 1, end):
                     if qc_rh[i] != 2:  # Skip dip initiation point and preserve bad data
                         qc_rh[i] = flag_rh_dip
+    
+        # Post-processing: Extend purge regions forward where data remains flat
+        # This carefully extends purge flags sample-by-sample into flat regions
+        qc_rh = extend_purge_regions(
+            qc_rh, 
+            ds['relative_humidity'], 
+            window_size, 
+            std_threshold_rh,
+            time_diff,
+            flag_purge=flag_purge,
+            flag_recovery=flag_rh_dip,
+            flag_good=flag_good
+        )
+        
+        # Copy the extended purge flags from RH to temperature
+        # Temperature should be flagged for the same periods as RH
+        purge_mask_extended = (qc_rh == flag_purge)
+        qc_temp = xr.where(purge_mask_extended, flag_purge, qc_temp)
+        
+        # Now flag recovery periods - always 6 minutes after purge ends
+        # Recovery periods always follow purge periods for 6 minutes
+        
+        # Find all purge periods after extension
+        purge_mask_final = (qc_rh == flag_purge).values
+        final_purge_periods = []
+        start_idx = None
+        for i, val in enumerate(purge_mask_final):
+            if val and start_idx is None:
+                start_idx = i
+            elif not val and start_idx is not None:
+                final_purge_periods.append((start_idx, i))
+                start_idx = None
+        if start_idx is not None:
+            final_purge_periods.append((start_idx, len(purge_mask_final)))
+        
+        # Recovery duration is always 6 minutes
+        recovery_duration_samples = int((6 * 60) / time_diff)
+        
+        for purge_start, purge_end in final_purge_periods:
+            # Recovery starts immediately after purge ends
+            if purge_end >= len(qc_rh):
+                continue
+                
+            recovery_start = purge_end
+            recovery_end = min(len(qc_rh), recovery_start + recovery_duration_samples)
+            
+            # Apply recovery flag for 6 minutes after purge
+            for i in range(recovery_start, recovery_end):
+                if qc_rh[i] != 2:  # Don't overwrite bad data
+                    qc_rh[i] = flag_rh_dip
     
         # Assign QC variables
         ds['qc_flag_air_temperature'] = qc_temp

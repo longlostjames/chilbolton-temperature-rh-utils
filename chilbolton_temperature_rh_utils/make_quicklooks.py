@@ -50,8 +50,12 @@ def plot_day(ds, nc_filename, outdir):
 
     time = ds['time'].values
 
-    # Get purge intervals
+    # Get purge intervals from temperature flags
     intervals = get_purge_intervals(ds['qc_flag_air_temperature'], ds['time'])
+    # Get purge intervals from RH flags (may differ due to extension)
+    intervals_rh = get_purge_intervals(ds['qc_flag_relative_humidity'], ds['time'], flag_value=3)
+    # Get recovery intervals from RH flags
+    recovery_intervals = get_purge_intervals(ds['qc_flag_relative_humidity'], ds['time'], flag_value=4)
     n_purges = len(intervals)
 
     # Create subplots with better proportions
@@ -105,15 +109,13 @@ def plot_day(ds, nc_filename, outdir):
         label = "Bad data (2)" if i == 0 else None  # Add label only for the first interval
         ax_full_rh.axvspan(start, end, color='grey', alpha=0.3, label=label)
 
-    # Shade regions where QC flag is 3 (purge regions)
-    for start, end in intervals:
+    # Shade regions where QC flag is 3 (purge regions) using actual RH flags
+    for start, end in intervals_rh:
         ax_full_rh.axvspan(start, end, color='red', alpha=0.2, label=None)
 
-    # Shade regions where QC flag is 4 (RH dip regions)
-    for start, end in intervals:
-        rh_start = end  # RH dip starts immediately after the purge region
-        rh_end = rh_start + pd.Timedelta(minutes=6)  # RH dip lasts for 6 minutes
-        ax_full_rh.axvspan(rh_start, rh_end, color='peachpuff', alpha=0.5, label=None)
+    # Shade regions where QC flag is 4 (RH recovery regions) using actual flags
+    for start, end in recovery_intervals:
+        ax_full_rh.axvspan(start, end, color='peachpuff', alpha=0.5, label=None)
 
     ax_full_rh.set_ylabel('Relative humidity (%)')
     ax_full_rh.set_xlabel('Time (UTC)')
@@ -169,13 +171,15 @@ def plot_day(ds, nc_filename, outdir):
                 label = "Bad data (2)" if j == 0 else None  # Add label only for the first interval
                 ax_zoom_rh.axvspan(start_zoom, end_zoom, color='grey', alpha=0.3, label=label)
 
-            # Shade regions where QC flag is 3 (purge regions)
-            ax_zoom_rh.axvspan(start, end, color='red', alpha=0.2, label=None)
+            # Shade regions where QC flag is 3 (purge regions) using actual RH flags
+            purge_intervals_zoom = get_purge_intervals(subset['qc_flag_relative_humidity'], subset['time'], flag_value=3)
+            for p_start, p_end in purge_intervals_zoom:
+                ax_zoom_rh.axvspan(p_start, p_end, color='red', alpha=0.2, label=None)
 
-            # Shade regions where QC flag is 4 (RH dip regions)
-            rh_start = end
-            rh_end = rh_start + pd.Timedelta(minutes=6)
-            ax_zoom_rh.axvspan(rh_start, rh_end, color='peachpuff', alpha=0.5, label=None)
+            # Shade regions where QC flag is 4 (RH recovery regions) using actual flags
+            recovery_intervals_zoom = get_purge_intervals(subset['qc_flag_relative_humidity'], subset['time'], flag_value=4)
+            for r_start, r_end in recovery_intervals_zoom:
+                ax_zoom_rh.axvspan(r_start, r_end, color='peachpuff', alpha=0.5, label=None)
 
             ax_zoom_rh.set_ylabel('Relative humidity (%)')
             ax_zoom_rh.set_xlabel('Time (UTC)')
