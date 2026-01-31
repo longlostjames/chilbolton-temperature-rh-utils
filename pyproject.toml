@@ -70,6 +70,8 @@ find-hmp155-purge-shift = "chilbolton_temperature_rh_utils.find_purge_shift:main
 count-hmp155-purge-flags = "chilbolton_temperature_rh_utils.count_purge_flags:main"
 split-cr1000x-data-daily = "chilbolton_temperature_rh_utils.split_cr1000x_data_daily:main"
 make-hmp155-quicklooks = "chilbolton_temperature_rh_utils.make_quicklooks:main"
+extract-hmp155-purge-indices = "chilbolton_temperature_rh_utils.extract_purge_indices:main"
+apply-hmp155-purge-indices = "chilbolton_temperature_rh_utils.apply_purge_indices:main"
 
 [tool.setuptools]
 packages = ["chilbolton_temperature_rh_utils"]
