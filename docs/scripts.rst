@@ -391,6 +391,94 @@ Flag temperature values below a threshold as bad data.
 
    python flag_low_temperature.py -f data.nc --threshold 240
 
+extract_purge_indices.py
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Extract purge and recovery cycle indices from NetCDF files and save to CSV.
+
+**Command Line Arguments:**
+
+.. code-block:: text
+
+   usage: extract_purge_indices.py [-h] -i INPUT_DIR -o OUTPUT_FILE [-y YEAR]
+
+   optional arguments:
+     -h, --help            Show help message and exit
+     -i INPUT_DIR          Directory containing NetCDF files (or parent with year subdirectories)
+     -o OUTPUT_FILE        Output CSV file path
+     -y YEAR               Specific year to process (optional, will look in INPUT_DIR/YYYY/)
+
+**Features:**
+
+* Extracts array indices where QC flags indicate purge (flag=3) or recovery (flag=4)
+* Outputs CSV with columns: date, purge1_start_idx, purge1_end_idx, recovery1_start_idx, recovery1_end_idx, purge2_start_idx, purge2_end_idx, recovery2_start_idx, recovery2_end_idx
+* Handles up to 2 purge cycles and 2 recovery periods per day
+* Indices refer to positions in the time coordinate array
+* Missing intervals are marked with NA values
+
+**Example:**
+
+.. code-block:: bash
+
+   # Extract indices for all files in a directory
+   python extract_purge_indices.py \
+       -i /path/to/netcdf/ \
+       -o purge_indices_2015.csv
+
+   # Extract indices for a specific year
+   python extract_purge_indices.py \
+       -i /gws/pw/j07/ncas_obs_vol2/cao/processing/ncas-temperature-rh-1/data/long-term/level1c \
+       -o purge_indices_2015.csv \
+       -y 2015
+
+apply_purge_indices.py
+~~~~~~~~~~~~~~~~~~~~~~
+
+Apply purge and recovery flags to NetCDF files based on indices from a CSV file.
+
+**Command Line Arguments:**
+
+.. code-block:: text
+
+   usage: apply_purge_indices.py [-h] -c CSV_FILE -i INPUT_DIR [-y YEAR]
+
+   optional arguments:
+     -h, --help            Show help message and exit
+     -c CSV_FILE           CSV file with purge indices (created by extract_purge_indices.py)
+     -i INPUT_DIR          Directory containing NetCDF files (or parent with year subdirectories)
+     -y YEAR               Specific year to process (optional, will look in INPUT_DIR/YYYY/)
+
+**Features:**
+
+* Reads CSV file with purge/recovery indices
+* Applies flags directly using array indexing (more efficient than time-based comparison)
+* Resets existing purge (flag=3) and recovery (flag=4) flags before applying new ones
+* Preserves bad data flags (flag=2)
+* Supports manual correction workflow: extract → edit CSV → re-apply
+
+**QC Flag Values:**
+
+* 1: Good data
+* 2: Bad data (preserved from previous flagging)
+* 3: Purge cycle (applied to both temperature and RH)
+* 4: Recovery period (applied to RH only)
+
+**Example:**
+
+.. code-block:: bash
+
+   # Apply indices from CSV file
+   python apply_purge_indices.py \
+       -c purge_indices_2015_corrected.csv \
+       -i /path/to/netcdf/ \
+       -y 2015
+
+**Manual Correction Workflow:**
+
+1. Extract indices: ``extract_purge_indices.py -i /data/ -o purge.csv -y 2015``
+2. Edit CSV file to correct any misidentified purge cycles
+3. Re-apply corrected indices: ``apply_purge_indices.py -c purge.csv -i /data/ -y 2015``
+
 Visualization Scripts
 ---------------------
 

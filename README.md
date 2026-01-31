@@ -87,6 +87,12 @@ flag-hmp155-purge-times-manual -f data.nc --prev-file yesterday.nc
 # Flag low temperatures
 flag-hmp155-low-temperature -f data.nc --threshold 245
 
+# Extract purge cycle indices to CSV for manual review
+extract-hmp155-purge-indices -i /path/to/netcdf/ -o purge_indices_2015.csv -y 2015
+
+# Apply manually corrected purge indices from CSV
+apply-hmp155-purge-indices -c purge_indices_2015.csv -i /path/to/netcdf/ -y 2015
+
 # Generate quicklook plots
 make-hmp155-quicklooks -y 2025 -i /path/to/netcdf/ -o /path/to/plots/
 ```
@@ -147,6 +153,36 @@ Process an entire year of data:
 # With correction files
 ./proc_year.sh 2020 temp_corrections.txt rh_corrections.txt
 ```
+
+## Manual Purge Cycle Correction Workflow
+
+For cases where automatic purge detection needs manual refinement:
+
+1. **Extract purge indices from processed files:**
+   ```bash
+   extract-hmp155-purge-indices \
+       -i /path/to/netcdf/ \
+       -o purge_indices_2015.csv \
+       -y 2015
+   ```
+
+2. **Review and edit the CSV file:**
+   The CSV contains columns: `date`, `purge1_start_idx`, `purge1_end_idx`, `recovery1_start_idx`, `recovery1_end_idx`, `purge2_start_idx`, `purge2_end_idx`, `recovery2_start_idx`, `recovery2_end_idx`.
+   
+   Edit the indices as needed for each day. Indices refer to array positions in the time coordinate.
+
+3. **Apply corrected indices back to NetCDF files:**
+   ```bash
+   apply-hmp155-purge-indices \
+       -c purge_indices_2015.csv \
+       -i /path/to/netcdf/ \
+       -y 2015
+   ```
+
+This workflow allows you to:
+- Extract detected purge cycles to a spreadsheet format
+- Manually review and correct timing issues
+- Re-apply the corrected flags to the data files
 
 ## Development
 
