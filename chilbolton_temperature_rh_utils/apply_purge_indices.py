@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import shutil
 from netCDF4 import Dataset
+from datetime import datetime
 
 
 def set_time_units_to_seconds_since_epoch(nc_file):
@@ -78,6 +79,16 @@ def apply_purge_indices_to_file(nc_file, purge_indices_row):
         # Update the flags
         ds['qc_flag_air_temperature'].values[:] = qc_temp
         ds['qc_flag_relative_humidity'].values[:] = qc_rh
+        
+        # Update history and last_modified attributes
+        timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        history_entry = f"{timestamp} - Applied purge/recovery indices from CSV file using apply-hmp155-purge-indices"
+        if 'history' in ds.attrs:
+            ds.attrs['history'] = f"{history_entry}\n{ds.attrs['history']}"
+        else:
+            ds.attrs['history'] = history_entry
+        
+        ds.attrs['last_modified'] = timestamp
         
         # Save changes using netCDF4 for in-place modification
         temp_filename = str(nc_file) + '.tmp'
