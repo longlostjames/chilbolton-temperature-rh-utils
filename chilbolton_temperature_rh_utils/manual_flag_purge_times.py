@@ -14,11 +14,19 @@ FLAG_RH_RECOVERY = 4
 def set_time_units_to_seconds_since_epoch(nc_file):
     """
     Reopen the NetCDF file using netCDF4 and set the time units to 'seconds since 1970-01-01 00:00:00'.
+    Also set required CF convention attributes.
     """
     with Dataset(nc_file, mode='r+') as ds:
         if 'time' in ds.variables:
             time_var = ds.variables['time']
             time_var.setncattr('units', 'seconds since 1970-01-01 00:00:00')
+            time_var.setncattr('standard_name', 'time')
+            time_var.setncattr('long_name', 'Time (seconds since 1970-01-01 00:00:00)')
+            time_var.setncattr('axis', 'T')
+            # Set valid_min and valid_max from actual data
+            if len(time_var[:]) > 0:
+                time_var.setncattr('valid_min', float(time_var[:].min()))
+                time_var.setncattr('valid_max', float(time_var[:].max()))
             print(f"Updated time units to 'seconds since 1970-01-01 00:00:00' in {nc_file}")
 
 def get_previous_day_purge_times(prev_file, shift_seconds=0):

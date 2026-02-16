@@ -226,8 +226,12 @@ def process_file(infile, outdir="./", metadata_file="metadata_stfc.json", aws_7_
         # Ensure the 'time' variable has the correct units and values
     if "time" in nc.variables:
         print("[INFO] Correcting the 'time' variable in the NetCDF file.")
-        # Set the correct units for the 'time' variable
+        # Set the correct units and CF convention attributes for the 'time' variable
         nc.variables["time"].setncattr("units", "seconds since 1970-01-01 00:00:00")
+        nc.variables["time"].setncattr("standard_name", "time")
+        nc.variables["time"].setncattr("long_name", "Time (seconds since 1970-01-01 00:00:00)")
+        nc.variables["time"].setncattr("axis", "T")
+        nc.variables["time"].setncattr("calendar", "standard")
         print(nc['time'])        
         # Convert the time values to cftime objects and ensure they are consistent
         time_values = nc.variables["time"][:]
@@ -239,6 +243,10 @@ def process_file(infile, outdir="./", metadata_file="metadata_stfc.json", aws_7_
             for t in time_values
         ]
         nc.variables["time"][:] = corrected_time_values
+        # Set valid_min and valid_max from the corrected data
+        if len(corrected_time_values) > 0:
+            nc.variables["time"].setncattr("valid_min", float(min(corrected_time_values)))
+            nc.variables["time"].setncattr("valid_max", float(max(corrected_time_values)))
 
     # Close file, remove empty
     file_name = nc.filepath()

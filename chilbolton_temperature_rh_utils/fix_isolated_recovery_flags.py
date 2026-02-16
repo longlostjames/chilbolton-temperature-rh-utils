@@ -90,7 +90,7 @@ def fix_isolated_recovery_flags(filename, dry_run=False):
                 ds['qc_flag_air_temperature'][:] = qc_temp
             
             # Update metadata
-            now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
             history_entry = f"{now} - Fixed {isolated_count} isolated recovery flags (changed flag=4 to flag=1 where no adjacent purge)"
             
             if 'history' in ds.attrs:

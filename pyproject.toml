@@ -72,6 +72,8 @@ split-cr1000x-data-daily = "chilbolton_temperature_rh_utils.split_cr1000x_data_d
 make-hmp155-quicklooks = "chilbolton_temperature_rh_utils.make_quicklooks:main"
 extract-hmp155-purge-indices = "chilbolton_temperature_rh_utils.extract_purge_indices:main"
 apply-hmp155-purge-indices = "chilbolton_temperature_rh_utils.apply_purge_indices:main"
+extract-hmp155-bad-data-indices = "chilbolton_temperature_rh_utils.extract_bad_data_indices:main"
+apply-hmp155-bad-data-indices = "chilbolton_temperature_rh_utils.apply_bad_data_indices:main"
 
 [tool.setuptools]
 packages = ["chilbolton_temperature_rh_utils"]

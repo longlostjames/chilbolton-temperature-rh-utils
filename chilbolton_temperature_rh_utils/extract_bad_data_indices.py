@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Extract purge and recovery indices from netCDF files and save to CSV.
+Extract bad data indices from netCDF files and save to CSV.
 """
 
 import xarray as xr
@@ -10,13 +10,13 @@ import os
 from pathlib import Path
 
 
-def get_purge_intervals(qc_flag, flag_value=3):
+def get_bad_data_intervals(qc_flag, flag_value=2):
     """Return list of (start_idx, end_idx) tuples where the specified QC flag value occurs."""
-    purge_mask = (qc_flag == flag_value).values
+    bad_data_mask = (qc_flag == flag_value).values
     intervals = []
 
     start_idx = None
-    for i, val in enumerate(purge_mask):
+    for i, val in enumerate(bad_data_mask):
         if val and start_idx is None:
             start_idx = i
         elif not val and start_idx is not None:
@@ -24,12 +24,12 @@ def get_purge_intervals(qc_flag, flag_value=3):
             intervals.append((start_idx, end_idx))
             start_idx = None
     if start_idx is not None:
-        intervals.append((start_idx, len(purge_mask) - 1))
+        intervals.append((start_idx, len(bad_data_mask) - 1))
     return intervals
 
 
-def extract_purge_indices_from_file(nc_file):
-    """Extract purge and recovery indices from a single netCDF file."""
+def extract_bad_data_indices_from_file(nc_file):
+    """Extract bad data indices from a single netCDF file for both temperature and RH."""
     try:
         ds = xr.open_dataset(nc_file)
         
@@ -41,28 +41,30 @@ def extract_purge_indices_from_file(nc_file):
         except (IndexError, ValueError):
             date = pd.to_datetime(ds['time'].values[0]).normalize()
         
-        # Get purge intervals (flag=3)
+        # Get bad data intervals (flag=2) for temperature
+        temp_bad_data_intervals = []
+        if 'qc_flag_air_temperature' in ds:
+            temp_bad_data_intervals = get_bad_data_intervals(ds['qc_flag_air_temperature'], flag_value=2)
+        
+        # Get bad data intervals (flag=2) for relative humidity
+        rh_bad_data_intervals = []
         if 'qc_flag_relative_humidity' in ds:
-            purge_intervals = get_purge_intervals(ds['qc_flag_relative_humidity'], flag_value=3)
-            recovery_intervals = get_purge_intervals(ds['qc_flag_relative_humidity'], flag_value=4)
-        else:
-            purge_intervals = []
-            recovery_intervals = []
+            rh_bad_data_intervals = get_bad_data_intervals(ds['qc_flag_relative_humidity'], flag_value=2)
         
         ds.close()
         
-        # Build result dictionary dynamically for any number of purge periods
+        # Build result dictionary dynamically for any number of bad data periods
         result = {'date': date}
         
-        # Add all purge periods found
-        for i, (start, end) in enumerate(purge_intervals, start=1):
-            result[f'purge{i}_start_idx'] = start
-            result[f'purge{i}_end_idx'] = end
+        # Add all temperature bad data periods found
+        for i, (start, end) in enumerate(temp_bad_data_intervals, start=1):
+            result[f'temp_bad{i}_start_idx'] = start
+            result[f'temp_bad{i}_end_idx'] = end
         
-        # Add all recovery periods found
-        for i, (start, end) in enumerate(recovery_intervals, start=1):
-            result[f'recovery{i}_start_idx'] = start
-            result[f'recovery{i}_end_idx'] = end
+        # Add all RH bad data periods found
+        for i, (start, end) in enumerate(rh_bad_data_intervals, start=1):
+            result[f'rh_bad{i}_start_idx'] = start
+            result[f'rh_bad{i}_end_idx'] = end
         
         return result
         
@@ -72,8 +74,8 @@ def extract_purge_indices_from_file(nc_file):
 
 
 def main():
-    """CLI entry point for extract-purge-indices command."""
-    parser = argparse.ArgumentParser(description="Extract purge and recovery indices from netCDF files to CSV.")
+    """CLI entry point for extract-hmp155-bad-data-indices command."""
+    parser = argparse.ArgumentParser(description="Extract bad data indices from netCDF files to CSV.")
     parser.add_argument(
         "-i", "--input_dir",
         required=True,
@@ -115,7 +117,7 @@ def main():
     # Extract indices from all files
     results = []
     for nc_file in nc_files:
-        result = extract_purge_indices_from_file(nc_file)
+        result = extract_bad_data_indices_from_file(nc_file)
         if result:
             results.append(result)
     
@@ -134,7 +136,7 @@ def main():
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         df.to_csv(args.output_file, index=False)
-        print(f"Saved purge indices to {args.output_file}")
+        print(f"Saved bad data indices to {args.output_file}")
         print(f"Processed {len(results)} days")
     else:
         print("No results to save")

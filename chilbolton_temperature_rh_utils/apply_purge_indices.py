@@ -17,11 +17,19 @@ from datetime import datetime
 def set_time_units_to_seconds_since_epoch(nc_file):
     """
     Reopen the NetCDF file using netCDF4 and set the time units to 'seconds since 1970-01-01 00:00:00'.
+    Also set required CF convention attributes.
     """
     with Dataset(nc_file, mode='r+') as ds:
         if 'time' in ds.variables:
             time_var = ds.variables['time']
             time_var.setncattr('units', 'seconds since 1970-01-01 00:00:00')
+            time_var.setncattr('standard_name', 'time')
+            time_var.setncattr('long_name', 'Time (seconds since 1970-01-01 00:00:00)')
+            time_var.setncattr('axis', 'T')
+            # Set valid_min and valid_max from actual data
+            if len(time_var[:]) > 0:
+                time_var.setncattr('valid_min', float(time_var[:].min()))
+                time_var.setncattr('valid_max', float(time_var[:].max()))
 
 
 def apply_purge_indices_to_file(nc_file, purge_indices_row):
@@ -50,38 +58,44 @@ def apply_purge_indices_to_file(nc_file, purge_indices_row):
         qc_temp[(qc_temp == flag_purge) | (qc_temp == flag_recovery)] = flag_good
         qc_rh[(qc_rh == flag_purge) | (qc_rh == flag_recovery)] = flag_good
         
-        # Apply purge 1 using indices
-        if pd.notna(purge_indices_row.get('purge1_start_idx')) and pd.notna(purge_indices_row.get('purge1_end_idx')):
-            start_idx = int(purge_indices_row['purge1_start_idx'])
-            end_idx = int(purge_indices_row['purge1_end_idx'])
-            qc_temp[start_idx:end_idx+1] = flag_purge
-            qc_rh[start_idx:end_idx+1] = flag_purge
-        
-        # Apply recovery 1 using indices
-        if pd.notna(purge_indices_row.get('recovery1_start_idx')) and pd.notna(purge_indices_row.get('recovery1_end_idx')):
-            start_idx = int(purge_indices_row['recovery1_start_idx'])
-            end_idx = int(purge_indices_row['recovery1_end_idx'])
-            qc_rh[start_idx:end_idx+1] = flag_recovery
-        
-        # Apply purge 2 using indices
-        if pd.notna(purge_indices_row.get('purge2_start_idx')) and pd.notna(purge_indices_row.get('purge2_end_idx')):
-            start_idx = int(purge_indices_row['purge2_start_idx'])
-            end_idx = int(purge_indices_row['purge2_end_idx'])
-            qc_temp[start_idx:end_idx+1] = flag_purge
-            qc_rh[start_idx:end_idx+1] = flag_purge
-        
-        # Apply recovery 2 using indices
-        if pd.notna(purge_indices_row.get('recovery2_start_idx')) and pd.notna(purge_indices_row.get('recovery2_end_idx')):
-            start_idx = int(purge_indices_row['recovery2_start_idx'])
-            end_idx = int(purge_indices_row['recovery2_end_idx'])
-            qc_rh[start_idx:end_idx+1] = flag_recovery
+        # Handle variable number of purge periods dynamically
+        # Parse all columns as a list to handle days with more than 2 purge periods
+        purge_num = 1
+        while True:
+            purge_start_col = f'purge{purge_num}_start_idx'
+            purge_end_col = f'purge{purge_num}_end_idx'
+            recovery_start_col = f'recovery{purge_num}_start_idx'
+            recovery_end_col = f'recovery{purge_num}_end_idx'
+            
+            # Check if this purge period exists in the CSV columns
+            has_purge = purge_start_col in purge_indices_row.index and purge_end_col in purge_indices_row.index
+            has_recovery = recovery_start_col in purge_indices_row.index and recovery_end_col in purge_indices_row.index
+            
+            if not (has_purge or has_recovery):
+                # No more purge periods defined
+                break
+            
+            # Apply purge using indices
+            if has_purge and pd.notna(purge_indices_row.get(purge_start_col)) and pd.notna(purge_indices_row.get(purge_end_col)):
+                start_idx = int(purge_indices_row[purge_start_col])
+                end_idx = int(purge_indices_row[purge_end_col])
+                qc_temp[start_idx:end_idx+1] = flag_purge
+                qc_rh[start_idx:end_idx+1] = flag_purge
+            
+            # Apply recovery using indices
+            if has_recovery and pd.notna(purge_indices_row.get(recovery_start_col)) and pd.notna(purge_indices_row.get(recovery_end_col)):
+                start_idx = int(purge_indices_row[recovery_start_col])
+                end_idx = int(purge_indices_row[recovery_end_col])
+                qc_rh[start_idx:end_idx+1] = flag_recovery
+            
+            purge_num += 1
         
         # Update the flags
         ds['qc_flag_air_temperature'].values[:] = qc_temp
         ds['qc_flag_relative_humidity'].values[:] = qc_rh
         
         # Update history and last_modified attributes
-        timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
         history_entry = f"{timestamp} - Applied purge/recovery indices from CSV file using apply-hmp155-purge-indices"
         if 'history' in ds.attrs:
             ds.attrs['history'] = f"{history_entry}\n{ds.attrs['history']}"
@@ -144,9 +158,34 @@ def main():
     
     args = parser.parse_args()
     
-    # Read CSV file
-    df = pd.read_csv(args.csv_file, parse_dates=['date'])
-    print(f"Read {len(df)} rows from {args.csv_file}")
+    # Read CSV file and handle variable number of columns per row
+    # First, read raw lines to find maximum number of columns
+    max_cols = 0
+    with open(args.csv_file, 'r') as f:
+        for line in f:
+            num_cols = len(line.strip().split(','))
+            if num_cols > max_cols:
+                max_cols = num_cols
+    
+    # Generate column names dynamically based on maximum columns found
+    if max_cols > 9:
+        # We have more than 2 purge periods in some rows
+        # Calculate number of purge periods: (max_cols - 1) / 4
+        num_periods = (max_cols - 1) // 4
+        col_names = ['date']
+        for i in range(1, num_periods + 1):
+            col_names.extend([
+                f'purge{i}_start_idx',
+                f'purge{i}_end_idx',
+                f'recovery{i}_start_idx',
+                f'recovery{i}_end_idx'
+            ])
+        df = pd.read_csv(args.csv_file, names=col_names, skiprows=1, parse_dates=['date'])
+        print(f"Read {len(df)} rows from {args.csv_file} (detected up to {num_periods} purge periods per day)")
+    else:
+        # Standard case with 2 purge periods
+        df = pd.read_csv(args.csv_file, parse_dates=['date'])
+        print(f"Read {len(df)} rows from {args.csv_file}")
     
     # Process each row
     success_count = 0
