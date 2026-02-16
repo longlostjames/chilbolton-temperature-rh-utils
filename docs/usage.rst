@@ -299,6 +299,77 @@ The software uses the following QC flag scheme:
 * **3**: Purge cycle (sensor purge in progress)
 * **4**: Recovery period (data potentially affected after purge)
 
+Advanced Workflows
+------------------
+
+Variable Purge Periods
+~~~~~~~~~~~~~~~~~~~~~~
+
+Starting in v1.0.0, the software supports any number of purge cycles per day (previously limited to 2). This allows for more flexible purge schedules.
+
+**Extract Purge Indices:**
+
+Extract purge cycle information from NetCDF files to CSV for manual review and adjustment:
+
+.. code-block:: bash
+
+   extract-hmp155-purge-indices -y 2020 \
+       -i /path/to/netcdf/ \
+       -o purge_indices_2020.csv
+
+The CSV file contains columns:
+
+* ``date``: Date of observations
+* ``purge1_start``, ``purge1_end``: First purge cycle times
+* ``purge2_start``, ``purge2_end``: Second purge cycle times
+* ``purge3_start``, ``purge3_end``: Third purge cycle times (if present)
+* Additional columns for more purge cycles as needed
+
+**Apply Purge Indices:**
+
+After manual review and correction of the CSV file, apply the purge indices back to NetCDF files:
+
+.. code-block:: bash
+
+   apply-hmp155-purge-indices -y 2020 \
+       -i /path/to/netcdf/ \
+       --indices purge_indices_2020.csv
+
+This updates the ``qc_flag`` variables in the NetCDF files based on the CSV data.
+
+Bad Data Management
+~~~~~~~~~~~~~~~~~~~
+
+Identify and correct periods of bad data that are not related to purge cycles.
+
+**Extract Bad Data Indices:**
+
+Extract periods flagged as bad data (qc_flag=2) to CSV:
+
+.. code-block:: bash
+
+   extract-hmp155-bad-data-indices -y 2020 \
+       -i /path/to/netcdf/ \
+       -o bad_data_indices_2020.csv
+
+The CSV file contains:
+
+* ``date``: Date of observations
+* ``bad_data_start``, ``bad_data_end``: Time ranges of bad data periods
+* Multiple columns for each bad data period found
+
+**Apply Bad Data Indices:**
+
+After reviewing and correcting the CSV, apply the bad data flags:
+
+.. code-block:: bash
+
+   apply-hmp155-bad-data-indices -y 2020 \
+       -i /path/to/netcdf/ \
+       --indices bad_data_indices_2020.csv
+
+This workflow allows for careful manual review and correction of data quality issues.
+
 Troubleshooting
 ---------------
 

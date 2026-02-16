@@ -31,6 +31,8 @@ Key Features
 * **File Splitting**: Split continuous datalogger files into daily files with automatic deduplication
 * **Format5 Support**: Full support for legacy binary Format5 data with channel database calibration
 * **Quality Control**: Automated detection of purge cycles and manual flagging capabilities
+* **Variable Purge Periods**: Dynamic support for any number of purge cycles per day (v1.0.0+)
+* **Bad Data Management**: Extract and apply bad data indices for manual quality control review (v1.0.0+)
 * **Visualization**: Generate daily quicklook plots and statistical summaries
 * **Batch Processing**: Shell scripts for processing entire years of data
 

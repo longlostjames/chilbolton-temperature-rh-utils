@@ -411,8 +411,8 @@ Extract purge and recovery cycle indices from NetCDF files and save to CSV.
 **Features:**
 
 * Extracts array indices where QC flags indicate purge (flag=3) or recovery (flag=4)
-* Outputs CSV with columns: date, purge1_start_idx, purge1_end_idx, recovery1_start_idx, recovery1_end_idx, purge2_start_idx, purge2_end_idx, recovery2_start_idx, recovery2_end_idx
-* Handles up to 2 purge cycles and 2 recovery periods per day
+* Outputs CSV with columns: date, purge1_start_idx, purge1_end_idx, recovery1_start_idx, recovery1_end_idx, purge2_start_idx, purge2_end_idx, recovery2_start_idx, recovery2_end_idx, ...
+* **Supports variable purge periods** (v1.0.0+): Dynamically handles any number of purge cycles per day (purge3, purge4, etc.)
 * Indices refer to positions in the time coordinate array
 * Missing intervals are marked with NA values
 
@@ -478,6 +478,91 @@ Apply purge and recovery flags to NetCDF files based on indices from a CSV file.
 1. Extract indices: ``extract_purge_indices.py -i /data/ -o purge.csv -y 2015``
 2. Edit CSV file to correct any misidentified purge cycles
 3. Re-apply corrected indices: ``apply_purge_indices.py -c purge.csv -i /data/ -y 2015``
+
+extract_bad_data_indices.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Extract bad data periods from NetCDF files and save to CSV for manual review.
+
+**Command Line Arguments:**
+
+.. code-block:: text
+
+   usage: extract_bad_data_indices.py [-h] -i INPUT_DIR -o OUTPUT_FILE [-y YEAR]
+
+   optional arguments:
+     -h, --help            Show help message and exit
+     -i INPUT_DIR          Directory containing NetCDF files (or parent with year subdirectories)
+     -o OUTPUT_FILE        Output CSV file path
+     -y YEAR               Specific year to process (optional, will look in INPUT_DIR/YYYY/)
+
+**Features:**
+
+* Extracts periods where QC flags indicate bad data (flag=2)
+* Outputs CSV with columns: date, bad_data1_start, bad_data1_end, bad_data2_start, bad_data2_end, ...
+* Supports any number of bad data periods per day (v1.0.0+)
+* Uses time strings (YYYY-MM-DD HH:MM:SS) for human readability
+* Enables manual review and correction of data quality issues
+
+**Example:**
+
+.. code-block:: bash
+
+   # Extract bad data periods for a specific year
+   extract-hmp155-bad-data-indices -y 2020 \
+       -i /path/to/netcdf/ \
+       -o bad_data_indices_2020.csv
+
+**Use Case:**
+
+Use this script when you need to review and potentially correct automated quality control decisions. The CSV output can be manually edited to add, remove, or adjust bad data periods before re-applying with ``apply_bad_data_indices.py``.
+
+apply_bad_data_indices.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Apply bad data flags to NetCDF files based on time periods from a CSV file.
+
+**Command Line Arguments:**
+
+.. code-block:: text
+
+   usage: apply_bad_data_indices.py [-h] -i INPUT_DIR --indices INDICES_FILE [-y YEAR]
+
+   optional arguments:
+     -h, --help            Show help message and exit
+     -i INPUT_DIR          Directory containing NetCDF files (or parent with year subdirectories)
+     --indices INDICES_FILE CSV file with bad data periods (time-based)
+     -y YEAR               Specific year to process (optional, will look in INPUT_DIR/YYYY/)
+
+**Features:**
+
+* Reads CSV file with bad data time periods
+* Applies bad data flags (flag=2) to both temperature and RH QC variables
+* Uses time-based matching (converts CSV times to compare with NetCDF time coordinate)
+* Resets existing bad data flags before applying new ones
+* Preserves purge (flag=3) and recovery (flag=4) flags
+* Supports any number of bad data periods per day (v1.0.0+)
+
+**QC Flag Updates:**
+
+* Sets flag=2 for all data points within bad data time ranges
+* Applies to both ``qc_flag_temperature`` and ``qc_flag_humidity`` variables
+* Does not modify purge/recovery flags
+
+**Example:**
+
+.. code-block:: bash
+
+   # Apply bad data flags from manually corrected CSV
+   apply-hmp155-bad-data-indices -y 2020 \
+       -i /path/to/netcdf/ \
+       --indices bad_data_indices_2020_corrected.csv
+
+**Manual Correction Workflow:**
+
+1. Extract bad data periods: ``extract-hmp155-bad-data-indices -i /data/ -o bad.csv -y 2020``
+2. Edit CSV file to add/remove/adjust bad data time ranges
+3. Re-apply corrected flags: ``apply-hmp155-bad-data-indices -i /data/ --indices bad.csv -y 2020``
 
 Visualization Scripts
 ---------------------

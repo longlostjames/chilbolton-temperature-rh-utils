@@ -7,6 +7,8 @@ NCAS Temperature RH-1 Software - Processing utilities for Chilbolton temperature
 - **Data Processing**: Convert Campbell Scientific CR1000X data or legacy Format5 files to CF-compliant NetCDF
 - **Format5 Support**: Full support for legacy binary Format5 data with channel database calibration
 - **Quality Control**: Automated detection of purge cycles and manual flagging capabilities
+  - Dynamic support for variable numbers of purge periods per day
+  - Bad data indices extraction and correction workflow
 - **Visualization**: Generate daily quicklook plots and statistical summaries
 - **Batch Processing**: Shell scripts for processing entire years of data
 
@@ -93,6 +95,12 @@ extract-hmp155-purge-indices -i /path/to/netcdf/ -o purge_indices_2015.csv -y 20
 # Apply manually corrected purge indices from CSV
 apply-hmp155-purge-indices -c purge_indices_2015.csv -i /path/to/netcdf/ -y 2015
 
+# Extract bad data indices to CSV for manual review
+extract-hmp155-bad-data-indices -i /path/to/netcdf/ -o bad_data_indices_2015.csv -y 2015
+
+# Apply manually corrected bad data indices from CSV
+apply-hmp155-bad-data-indices -c bad_data_indices_2015.csv -i /path/to/netcdf/ -y 2015
+
 # Generate quicklook plots
 make-hmp155-quicklooks -y 2025 -i /path/to/netcdf/ -o /path/to/plots/
 ```
@@ -167,7 +175,9 @@ For cases where automatic purge detection needs manual refinement:
    ```
 
 2. **Review and edit the CSV file:**
-   The CSV contains columns: `date`, `purge1_start_idx`, `purge1_end_idx`, `recovery1_start_idx`, `recovery1_end_idx`, `purge2_start_idx`, `purge2_end_idx`, `recovery2_start_idx`, `recovery2_end_idx`.
+   The CSV contains columns for up to multiple purge periods per day: `date`, `purge1_start_idx`, `purge1_end_idx`, `recovery1_start_idx`, `recovery1_end_idx`, `purge2_start_idx`, `purge2_end_idx`, `recovery2_start_idx`, `recovery2_end_idx`, and so on.
+   
+   **Variable Purge Periods:** The system now supports a variable number of purge periods per day. On days with more than 2 purge cycles (e.g., during maintenance or testing), additional columns (purge3_*, purge4_*, etc.) can be added. The processing tools automatically detect and handle any number of purge periods.
    
    Edit the indices as needed for each day. Indices refer to array positions in the time coordinate.
 
@@ -182,7 +192,38 @@ For cases where automatic purge detection needs manual refinement:
 This workflow allows you to:
 - Extract detected purge cycles to a spreadsheet format
 - Manually review and correct timing issues
+- Handle days with unusual numbers of purge cycles
 - Re-apply the corrected flags to the data files
+
+## Manual Bad Data Correction Workflow
+
+For identifying and flagging additional bad data points not caught by automatic QC:
+
+1. **Extract bad data indices from processed files:**
+   ```bash
+   extract-hmp155-bad-data-indices \
+       -i /path/to/netcdf/ \
+       -o bad_data_indices_2015.csv \
+       -y 2015
+   ```
+
+2. **Review and edit the CSV file:**
+   The CSV contains columns: `date`, `bad_data_start_idx`, `bad_data_end_idx`.
+   
+   Add rows for each period of bad data, specifying the date and start/end array indices. Multiple periods per day can be specified.
+
+3. **Apply bad data flags back to NetCDF files:**
+   ```bash
+   apply-hmp155-bad-data-indices \
+       -c bad_data_indices_2015.csv \
+       -i /path/to/netcdf/ \
+       -y 2015
+   ```
+
+This workflow allows you to:
+- Flag data periods affected by sensor malfunction or contamination
+- Document and preserve bad data periods in a reviewable format
+- Apply consistent bad data flags across the dataset
 
 ## Development
 
@@ -201,6 +242,15 @@ black chilbolton_temperature_rh_utils/
 # Type checking
 mypy chilbolton_temperature_rh_utils/
 ```
+
+## Version History
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+
+**Latest Release: v1.0.0** (2026-02-16)
+- Variable purge periods support (any number per day)
+- Bad data indices extraction and application workflow
+- Enhanced processing modules for flexible purge handling
 
 ## License
 
