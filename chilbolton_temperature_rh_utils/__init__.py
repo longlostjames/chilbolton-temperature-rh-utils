@@ -12,7 +12,7 @@ This package provides tools for:
 - Batch processing workflows
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "Chris Walden"
 
 # Import main processing functions
