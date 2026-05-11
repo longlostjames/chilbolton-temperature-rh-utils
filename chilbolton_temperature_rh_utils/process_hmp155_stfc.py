@@ -123,7 +123,7 @@ def process_file(infile, outdir="./", metadata_file="metadata_stfc.json", aws_7_
     print(df)
 
     # Check if the year of the last timestamp is one greater than the previous timestamp
-    if df["TIMESTAMP"][-1].year > df["TIMESTAMP"][-2].year:
+    if len(df) >= 2 and df["TIMESTAMP"][-1].year > df["TIMESTAMP"][-2].year:
         print("[INFO] Adjusting the last timestamp to be one year earlier temporarily.")
         # Temporarily adjust the last timestamp
         original_last_timestamp = df["TIMESTAMP"][-1]

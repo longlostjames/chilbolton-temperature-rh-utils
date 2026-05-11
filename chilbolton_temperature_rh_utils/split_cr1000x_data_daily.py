@@ -13,7 +13,7 @@ try:
 except ImportError:
     __version__ = "unknown"
 
-def split_file(input_file, output_dir, delimiter, timestamp_column, verbose=False):
+def split_file(input_file, output_dir, delimiter, timestamp_column, start_date=None, end_date=None, verbose=False):
     # === READ THE FIRST 4 HEADER LINES (TOA5 METADATA) ===
     with open(input_file, 'r', encoding='utf-8') as f:
         header_lines = [next(f) for _ in range(4)]
@@ -35,6 +35,12 @@ def split_file(input_file, output_dir, delimiter, timestamp_column, verbose=Fals
     # Parse timestamps with explicit format (CR1000X typical format: YYYY-MM-DD HH:MM:SS)
     df[timestamp_column] = pd.to_datetime(df[timestamp_column], format='%Y-%m-%d %H:%M:%S', errors='coerce')
     df = df.dropna(subset=[timestamp_column])
+
+    # === FILTER BY DATE RANGE ===
+    if start_date is not None:
+        df = df[df[timestamp_column] >= pd.Timestamp(start_date)]
+    if end_date is not None:
+        df = df[df[timestamp_column] < pd.Timestamp(end_date) + pd.Timedelta(days=1)]
 
     # === SHIFT MIDNIGHT TO PREVIOUS DAY ===
     timestamps = df[timestamp_column]
@@ -111,6 +117,8 @@ def main():
     parser.add_argument("-d", "--delimiter", default=",", help="Delimiter for input file (default: ',')")
     parser.add_argument("-t", "--timestamp_column", default="TIMESTAMP", help="Name of timestamp column (default: TIMESTAMP)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--start-date", default=None, help="Only process data on or after this date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", default=None, help="Only process data on or before this date (YYYY-MM-DD)")
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -122,7 +130,8 @@ def main():
     # Process all matching files
     for input_file in sorted(input_dir.glob("CR1000XSeries_Chilbolton_Rxcabinmet1*.dat")):
         print(f"Processing {input_file}")
-        split_file(str(input_file), output_dir, args.delimiter, args.timestamp_column, args.verbose)
+        split_file(str(input_file), output_dir, args.delimiter, args.timestamp_column,
+                   start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
 
     # Deduplicate daily files
     deduplicate_daily_files(output_dir, args.verbose)
