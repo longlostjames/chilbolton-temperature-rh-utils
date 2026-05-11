@@ -23,10 +23,10 @@ variant) to CF-compliant NetCDF files with automated QC flagging."""
     parser.add_argument("-y", "--year", required=True, type=int,
                         help="Year to process (e.g., 2024)")
     parser.add_argument("--raw-data-base", type=str,
-                        default="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term",
+                        default="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/new_daily_split",
                         help="Base directory for raw data")
     parser.add_argument("--output-base", type=str,
-                        default="/gws/pw/j07/ncas_obs_vol2/cao/processing/ncas-temperature-rh-1/data/long-term/level1",
+                        default="/gws/pw/j07/ncas_obs_vol2/cao/processing/ncas-temperature-rh-1/20150415_long-term",
                         help="Base directory for output NetCDF files")
     
     args = parser.parse_args()

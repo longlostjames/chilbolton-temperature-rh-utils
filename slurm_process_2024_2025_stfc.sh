@@ -24,14 +24,14 @@ mkdir -p logs
 # Set paths
 RAW_DATA_BASE="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/new_daily_split"
 OUTPUT_BASE="/gws/pw/j07/ncas_obs_vol2/cao/processing/ncas-temperature-rh-1/20150415_long-term"
-METADATA_FILE="/home/users/cjwalden/git/chilbolton-temperature-rh-utils/chilbolton_temperature_rh_utils/metadata.json"
+METADATA_FILE="/home/users/cjwalden/git/chilbolton-temperature-rh-utils/chilbolton_temperature_rh_utils/metadata_stfc.json"
 
 
 # Process each year
 process-hmp155-year-stfc \
     -y ${SLURM_ARRAY_TASK_ID} \
     --raw-data-base $RAW_DATA_BASE \
-    --output-base $OUTPUT_BASE
+    --output-base $OUTPUT_BASE 
     #--corr-file-temperature /home/users/cjwalden/git/chilbolton-temperature-rh-utils/correction_air_temperature.dat \
     #--corr-file-rh /home/users/cjwalden/git/chilbolton-temperature-rh-utils/correction_relative_humidity.dat
     

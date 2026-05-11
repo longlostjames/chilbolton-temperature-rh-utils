@@ -492,6 +492,16 @@ app.layout = html.Div(
                         "fontSize": "0.9em",
                     },
                 ),
+                html.Span(
+                    id="ncfile-display",
+                    style={
+                        "marginLeft": "16px",
+                        "fontFamily": "monospace",
+                        "color": "#336",
+                        "fontSize": "0.82em",
+                        "wordBreak": "break-all",
+                    },
+                ),
             ],
             style={
                 "display": "flex",
@@ -804,6 +814,7 @@ app.layout = html.Div(
         dcc.Store(id="dataset-store"),   # serialised arrays for the loaded day
         dcc.Store(id="indices-store"),   # current working boundary indices
         dcc.Store(id="csv-store"),       # year's CSV as list-of-dicts
+        dcc.Store(id="ncfile-store"),    # path of the loaded NetCDF file
     ],
     style={"maxWidth": "1400px", "margin": "0 auto"},
 )
@@ -898,6 +909,8 @@ def navigate_day(prev_n, next_n, current_date):
     Output("dataset-store", "data"),
     Output("indices-store", "data"),
     Output("status-msg", "children"),
+    Output("ncfile-store", "data"),
+    Output("ncfile-display", "children"),
     Output("idx-purge1_start_idx", "value"),
     Output("idx-purge1_end_idx", "value"),
     Output("idx-recovery1_start_idx", "value"),
@@ -908,8 +921,9 @@ def navigate_day(prev_n, next_n, current_date):
 )
 def load_day(date_str, year, csv_records):
     if not date_str:
-        return None, None, "No date selected.", None, None, None, None
+        return None, None, "No date selected.", None, "", None, None, None, None
     date = datetime.date.fromisoformat(str(date_str)[:10])
+    nc_path = _glob_day_files(TRH_ROOTS, date.year, date.month, date.day)
     ds = load_day_trh(date.year, date.month, date.day)
     store_data = dataset_to_store(ds)
 
@@ -921,15 +935,19 @@ def load_day(date_str, year, csv_records):
 
     if store_data is None:
         status = f"No NetCDF file found for {date_str}."
+        nc_label = ""
     else:
         n = len(store_data["times"])
         in_csv = "in CSV" if not all(v is None for v in get_row_indices(df, date).values()) else "not in CSV"
         status = f"{n} samples — {in_csv}."
+        nc_label = nc_path if nc_path else ""
 
     return (
         store_data,
         indices,
         status,
+        nc_path,
+        nc_label,
         indices.get("purge1_start_idx"),
         indices.get("purge1_end_idx"),
         indices.get("recovery1_start_idx"),
