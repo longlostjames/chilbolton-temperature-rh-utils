@@ -204,7 +204,17 @@ def process_file(infile, outdir="./", metadata_file="metadata_stfc.json", aws_7_
     nant.util.update_variable(nc, "air_temperature", df["Air_T_Avg"])
     nant.util.update_variable(nc, "relative_humidity", df["RH_Avg"])
 
-
+    # Initialise QC flags to 0 (not yet assessed); create variables if not in template
+    for _qc_var_name in ("qc_flag_air_temperature", "qc_flag_relative_humidity"):
+        if _qc_var_name not in nc.variables:
+            _qc_var = nc.createVariable(_qc_var_name, "i1", ("time",))
+            _qc_var.setncattr("long_name", f"Data Quality Flag: {_qc_var_name.replace('qc_flag_', '').replace('_', ' ')}")
+            _qc_var.setncattr("units", "1")
+            _qc_var.setncattr("flag_values", np.array([0, 1, 2, 3, 4], dtype=np.int8))
+            _qc_var.setncattr("flag_meanings", "not_used good_data bad_data_do_not_use suspect_data recovery")
+            _qc_var[:] = 0
+        else:
+            nc.variables[_qc_var_name][:] = 0
 
     # Add time_coverage_start and time_coverage_end metadata using data from get_times
     nc.setncattr(

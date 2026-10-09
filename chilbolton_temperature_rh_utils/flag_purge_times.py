@@ -230,29 +230,6 @@ def set_time_units_to_seconds_since_epoch(nc_file):
                 time_var.setncattr('valid_max', float(time_var[:].max()))
             print(f"Updated time units to 'seconds since 1970-01-01 00:00:00' in {nc_file}")
 
-def read_bad_intervals(corr_file):
-    bad_intervals = []
-    with open(corr_file, "r") as f:
-        for line in f:
-            parts = line.strip().split()
-            if len(parts) == 4 and parts[-1] == "BADDATA":
-                date = parts[0]
-                start = parts[1]
-                end = parts[2]
-                start_dt = datetime.strptime(date + start, "%Y%m%d%H%M%S")
-                end_dt = datetime.strptime(date + end, "%Y%m%d%H%M%S")
-                bad_intervals.append((start_dt, end_dt))
-    return bad_intervals
-
-def flag_bad_data_xr(ds, bad_intervals, flag_var):
-    # Convert NetCDF time to pandas datetime
-    time = pd.to_datetime(ds['time'].values)
-    qc = ds[flag_var].values.copy()
-    for start, end in bad_intervals:
-        mask = (time >= start) & (time <= end)
-        qc[mask] = 2
-    ds[flag_var].values[:] = qc
-
 # Open the dataset in read/write mode
 
 def main():
@@ -265,10 +242,6 @@ def main():
                         help='Path to the previous day NetCDF file for RH dip flagging context')
     parser.add_argument('--next-file', type=str, default=None,
                         help='Path to the next day NetCDF file for purge timing context')
-    parser.add_argument('--corr-file-temperature', type=str, default=None,
-                        help='Path to the correction file for bad air temperature intervals')
-    parser.add_argument('--corr-file-rh', type=str, default=None,
-                        help='Path to the correction file for bad relative humidity intervals')
     parser.add_argument('--window-minutes', type=int, default=8,
                         help='Rolling window size in minutes (default: 8)')
     parser.add_argument('--std-threshold-temp', type=float, default=0.03,
@@ -283,8 +256,6 @@ def main():
     filename = args.filename
     previous_filename = args.previous_file
     next_filename = args.next_file
-    corr_file_temperature = args.corr_file_temperature
-    corr_file_rh = args.corr_file_rh
     window_minutes = args.window_minutes
     std_threshold_temp = args.std_threshold_temp
     std_threshold_rh = args.std_threshold_rh
@@ -746,17 +717,6 @@ def main():
             'flag_values': np.array([0, 1, 2, 3, 4], dtype=np.int8),
             'flag_meanings': 'not_used good_data bad_data_measurement_suspect bad_data_purge_cycle_value_fixed_as_start_of_purge recovery_in_rh_after_purge'
         }
-    
-        # --- Flag bad data intervals from correction files ---
-        if corr_file_temperature:
-            bad_intervals_temp = read_bad_intervals(corr_file_temperature)
-            print(f"Flagging bad data intervals for air temperature from {corr_file_temperature}")
-            flag_bad_data_xr(ds, bad_intervals_temp, "qc_flag_air_temperature")
-    
-        if corr_file_rh:
-            bad_intervals_rh = read_bad_intervals(corr_file_rh)
-            print(f"Flagging bad data intervals for relative humidity from {corr_file_rh}")
-            flag_bad_data_xr(ds, bad_intervals_rh, "qc_flag_relative_humidity")
     
         # Save changes using netCDF4 for in-place modification
         # First, write to a temporary file

@@ -9,7 +9,7 @@
 #SBATCH --output=logs/hmp155_main_2020-2024_%j.out
 #SBATCH --error=logs/hmp155_main_2020-2024_%j.err
 #SBATCH --array=2020-2024
-#SBATCH --account=ncas_radar
+#SBATCH --account=chil_atmos
 #SBATCH --qos=standard
 
 # Process HMP155 data from 2020-2024 using main version

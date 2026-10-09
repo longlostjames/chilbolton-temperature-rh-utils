@@ -10,6 +10,24 @@ import argparse
 from datetime import datetime
 import os
 import shutil
+from netCDF4 import Dataset
+
+
+def set_time_units_to_seconds_since_epoch(nc_file):
+    """
+    Reopen the NetCDF file using netCDF4 and set the time units to
+    'seconds since 1970-01-01 00:00:00'.
+    """
+    with Dataset(nc_file, mode='r+') as ds:
+        if 'time' in ds.variables:
+            time_var = ds.variables['time']
+            time_var.setncattr('units', 'seconds since 1970-01-01 00:00:00')
+            time_var.setncattr('standard_name', 'time')
+            time_var.setncattr('long_name', 'Time (seconds since 1970-01-01 00:00:00)')
+            time_var.setncattr('axis', 'T')
+            if len(time_var[:]) > 0:
+                time_var.setncattr('valid_min', float(time_var[:].min()))
+                time_var.setncattr('valid_max', float(time_var[:].max()))
 
 
 def fix_isolated_recovery_flags(filename, dry_run=False):
@@ -108,7 +126,10 @@ def fix_isolated_recovery_flags(filename, dry_run=False):
             
             # Replace original with corrected file
             shutil.move(temp_filename, filename)
-            
+
+            # Fix time units that xarray may have altered
+            set_time_units_to_seconds_since_epoch(filename)
+
             print(f"  Fixed {isolated_count} isolated recovery flags")
             print(f"  Updated history and last_revised_date metadata")
         else:

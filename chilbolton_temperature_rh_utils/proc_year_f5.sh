@@ -50,8 +50,6 @@ while [ "$current_date" -le "$end_date" ]; do
     # Find metadata file from package installation
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     mfile="${script_dir}/metadata_f5.json"
-    corr_file_oat="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/oatnew_ch.corr"
-    corr_file_rh="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/rhnew_ch.corr"
 
     # Run the Python script
     python -c "from chilbolton_temperature_rh_utils.process_hmp155_f5 import main; import sys; sys.argv = ['process-hmp155-f5', '$infile', '-m', '$mfile', '-o', '$outdir']; main()"
@@ -63,10 +61,10 @@ while [ "$current_date" -le "$end_date" ]; do
     if [ -f "$ncfile" ]; then
         if [ -z "$previous_ncfile" ]; then
             # No previous file for the first day
-            python -c "from chilbolton_temperature_rh_utils.flag_purge_times import main; import sys; sys.argv = ['flag-hmp155-purge-times', '$ncfile', '--corr-file-temperature', '$corr_file_oat', '--corr-file-rh', '$corr_file_rh']; main()"
+            python -c "from chilbolton_temperature_rh_utils.flag_purge_times import main; import sys; sys.argv = ['flag-hmp155-purge-times', '$ncfile']; main()"
         else
             # Use the previous day's file for consistency checks
-            python -c "from chilbolton_temperature_rh_utils.flag_purge_times import main; import sys; sys.argv = ['flag-hmp155-purge-times', '$ncfile', '--previous-file', '$previous_ncfile', '--corr-file-temperature', '$corr_file_oat', '--corr-file-rh', '$corr_file_rh']; main()"
+            python -c "from chilbolton_temperature_rh_utils.flag_purge_times import main; import sys; sys.argv = ['flag-hmp155-purge-times', '$ncfile', '--previous-file', '$previous_ncfile']; main()"
         fi
         # Update the previous file to the current file
         previous_ncfile="$ncfile"

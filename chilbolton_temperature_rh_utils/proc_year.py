@@ -28,12 +28,6 @@ to CF-compliant NetCDF files with automated QC flagging."""
     parser.add_argument("--output-base", type=str,
                         default="/gws/pw/j07/ncas_obs_vol2/cao/processing/ncas-temperature-rh-1/data/long-term/level1a",
                         help="Base directory for output NetCDF files")
-    parser.add_argument("--corr-file-temperature", type=str,
-                        default="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/oatnew_ch.corr",
-                        help="Correction file for air temperature")
-    parser.add_argument("--corr-file-rh", type=str,
-                        default="/gws/pw/j07/ncas_obs_vol2/cao/raw_data/met_cao/data/long-term/corrections/rhnew_ch.corr",
-                        help="Correction file for relative humidity")
     
     args = parser.parse_args()
     
@@ -92,8 +86,6 @@ to CF-compliant NetCDF files with automated QC flagging."""
                 # Build arguments for flag_purge_main
                 flag_args = [
                     str(ncfile),
-                    "--corr-file-temperature", args.corr_file_temperature,
-                    "--corr-file-rh", args.corr_file_rh
                 ]
                 
                 if previous_ncfile:

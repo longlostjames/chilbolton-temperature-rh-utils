@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-QC web interface for HMP155 purge indices.
+QC web interface for HMP155 purge, recovery and bad-data flags.
 
-Allows point-and-click editing of purge_indices_YYYY.csv files via a Plotly
-Dash app served locally over SSH local port forwarding.
+Allows point-and-click editing of the monthly .corr correction files via a
+Plotly Dash app served locally over SSH local port forwarding.
 
 Run with:
     python qc_app.py [--port 8051] [--host 127.0.0.1]
@@ -14,7 +14,7 @@ Then open http://localhost:8051 in your browser.
 
 Environment variables (override defaults):
     TRH_DATA_ROOT   Root directory for level1d NetCDF files
-    PURGE_CSV_DIR   Directory containing purge_indices_YYYY.csv files
+    TRH_CORR_DIR    Base directory of the .corr corrections tree
 """
 
 import argparse
@@ -31,6 +31,13 @@ from plotly.subplots import make_subplots
 import xarray as xr
 from dash import Input, Output, State, callback, ctx, dcc, html
 
+from chilbolton_temperature_rh_utils import qc_corrections
+from chilbolton_temperature_rh_utils.qc_corrections import (
+    FLAG_BAD,
+    FLAG_PURGE,
+    FLAG_RECOVERY,
+)
+
 # ---------------------------------------------------------------------------
 # Data roots — override with environment variables
 # ---------------------------------------------------------------------------
@@ -42,7 +49,7 @@ _GWS = "/gws/pw/j07/ncas_obs_vol2/cao/processing/ncas-temperature-rh-1/data/long
 # 2015–2024-03-31: published archive on BADC
 _BADC = "/badc/ncas-cao/data/ncas-temperature-rh-1/20150415_longterm/v1.1"
 # 2024-04-01 onward: long-term processing on GWS
-_GWS_LONG = "/gws/pw/j07/ncas_obs_vol2/cao/processing/ncas-temperature-rh-1/20150415_long-term"
+_GWS_LONG = "/gws/ssde/j25a/chil_atmos/processing/stfc-temperature-rh-1/20240401_longterm/latest-no-qc/"
 TRH_ROOTS = [
     # 2024-04-01 onward: long-term GWS processing (yearly)
     (_GWS_LONG, "yearly"),
@@ -50,10 +57,12 @@ TRH_ROOTS = [
     (_BADC, "yearly"),
 ]
 
-# Directory containing purge_indices_YYYY.csv files (defaults to this repo)
-CSV_DIR = os.environ.get(
-    "PURGE_CSV_DIR",
-    os.path.dirname(os.path.abspath(__file__)),
+# Base of the .corr corrections tree, in the same index-based format
+# used by chilbolton-pressure-utils:
+#     <base>/<variable>/YYYY/YYYYMM.corr
+CORR_DIR = os.environ.get(
+    "TRH_CORR_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "corrections"),
 )
 
 # ---------------------------------------------------------------------------
@@ -70,6 +79,9 @@ INDEX_KEYS = [
 BOUNDARY_OPTIONS = [
     {"label": " Drag to set purge period", "value": "drag_purge"},
     {"label": " Drag to set recovery period", "value": "drag_recovery"},
+    {"label": " Drag to add bad data (temperature)", "value": "drag_bad_temp"},
+    {"label": " Drag to add bad data (RH)", "value": "drag_bad_rh"},
+    {"label": " Drag to add bad data (both)", "value": "drag_bad_both"},
     {"label": " Set purge start", "value": "purge1_start_idx"},
     {"label": " Set purge end", "value": "purge1_end_idx"},
     {"label": " Set recovery start", "value": "recovery1_start_idx"},
@@ -123,11 +135,14 @@ def available_years():
         for entry in os.listdir(root):
             if entry.isdigit() and len(entry) == 4:
                 years.add(int(entry))
-    # Also include years that have existing CSV files
-    for fname in glob.glob(os.path.join(CSV_DIR, "purge_indices_????.csv")):
-        m = re.search(r"purge_indices_(\d{4})\.csv$", fname)
-        if m:
-            years.add(int(m.group(1)))
+    # Also include years that already have .corr files
+    for variable in ("temperature", "rh"):
+        var_dir = os.path.join(CORR_DIR, qc_corrections.CORR_VARIABLES[variable])
+        if not os.path.isdir(var_dir):
+            continue
+        for entry in os.listdir(var_dir):
+            if entry.isdigit() and len(entry) == 4:
+                years.add(int(entry))
     today_year = datetime.date.today().year
     years.add(today_year)
     return sorted(years)
@@ -192,86 +207,139 @@ def dataset_to_store(ds):
 
 
 # ---------------------------------------------------------------------------
-# Purge indices CSV I/O
+# Bad-data / purge / recovery .corr file I/O
+#
+# See chilbolton_temperature_rh_utils.qc_corrections for the file format.
+# Purge intervals (flag 3) are duplicated into both variable folders; recovery
+# intervals (flag 4) apply to relative humidity only.
 # ---------------------------------------------------------------------------
 
-def csv_path(year):
-    return os.path.join(CSV_DIR, f"purge_indices_{year}.csv")
+def load_corr_intervals(variable, date):
+    return qc_corrections.load_corr_intervals(CORR_DIR, variable, date)
 
 
-def load_purge_csv(year):
-    """Load purge indices CSV for a year, or return an empty DataFrame."""
-    path = csv_path(year)
-    if not os.path.exists(path):
-        return pd.DataFrame(columns=["date"] + INDEX_KEYS)
-    try:
-        df = pd.read_csv(path, parse_dates=["date"])
-        return df
-    except Exception as e:
-        print(f"Warning: could not read {path}: {e}")
-        return pd.DataFrame(columns=["date"] + INDEX_KEYS)
+def save_corr_intervals(variable, date, intervals):
+    return qc_corrections.save_corr_intervals(CORR_DIR, variable, date, intervals)
 
 
-def save_purge_csv(year, df):
-    """Save purge indices DataFrame to CSV, sorted by date."""
-    path = csv_path(year)
-    df_sorted = df.sort_values("date").copy()
-    df_sorted["date"] = pd.to_datetime(df_sorted["date"]).dt.strftime("%Y-%m-%d")
-    df_sorted.to_csv(path, index=False)
+def save_day_corr(date, indices, temp_intervals, rh_intervals):
+    """Write a day's complete set of intervals to both variable .corr files."""
+    purge, recovery = indices_to_intervals(indices)
+    save_corr_intervals("temperature", date, sorted(set(temp_intervals + purge)))
+    save_corr_intervals("rh", date, sorted(set(rh_intervals + purge + recovery)))
 
 
-def csv_to_store(year):
-    """Return CSV contents as a list-of-dicts suitable for dcc.Store."""
-    df = load_purge_csv(year)
-    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
-    return df.to_dict("records")
+def indices_to_intervals(indices):
+    """Split boundary indices into (purge, recovery) interval lists."""
+    indices = indices or {}
+    purge, recovery = [], []
+    p_s, p_e = indices.get("purge1_start_idx"), indices.get("purge1_end_idx")
+    r_s, r_e = indices.get("recovery1_start_idx"), indices.get("recovery1_end_idx")
+    if p_s is not None and p_e is not None:
+        purge.append((int(p_s), int(p_e), FLAG_PURGE))
+    if r_s is not None and r_e is not None:
+        recovery.append((int(r_s), int(r_e), FLAG_RECOVERY))
+    return purge, recovery
 
 
-def store_to_df(records):
-    """Re-hydrate a dcc.Store list-of-dicts into a DataFrame."""
-    if not records:
-        return pd.DataFrame(columns=["date"] + INDEX_KEYS)
-    df = pd.DataFrame(records)
-    df["date"] = pd.to_datetime(df["date"])
-    return df
-
-
-def get_row_indices(df, date):
-    """Return dict of index values for a date, inferring None for missing."""
-    date = pd.Timestamp(date).normalize()
-    mask = pd.to_datetime(df["date"]).dt.normalize() == date
-    empty = {k: None for k in INDEX_KEYS}
-    if not mask.any():
-        return empty
-    row = df[mask].iloc[0]
-    result = {}
-    for k in INDEX_KEYS:
-        v = row.get(k, np.nan)
-        result[k] = None if (isinstance(v, float) and np.isnan(v)) else int(v)
+def intervals_to_indices(intervals):
+    """Take the first purge (flag 3) and recovery (flag 4) interval as boundaries."""
+    result = {k: None for k in INDEX_KEYS}
+    for start_idx, end_idx, flag in intervals:
+        if flag == FLAG_PURGE and result["purge1_start_idx"] is None:
+            result["purge1_start_idx"], result["purge1_end_idx"] = start_idx, end_idx
+        elif flag == FLAG_RECOVERY and result["recovery1_start_idx"] is None:
+            result["recovery1_start_idx"], result["recovery1_end_idx"] = start_idx, end_idx
     return result
 
 
-def upsert_row(df, date, indices):
-    """Insert or update a row in the DataFrame."""
-    date = pd.Timestamp(date).normalize()
-    mask = pd.to_datetime(df["date"]).dt.normalize() == date
-    new_row = {"date": date}
-    for k in INDEX_KEYS:
-        v = indices.get(k)
-        new_row[k] = int(v) if v is not None else np.nan
-    if mask.any():
-        for col, val in new_row.items():
-            df.loc[mask, col] = val
-    else:
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    return df
+def split_day_corr(date):
+    """Return (indices, temp_extra_intervals, rh_extra_intervals) for a date.
+
+    The first purge and recovery become the editable boundary indices; any
+    further intervals stay in the extras boxes so they are never lost.
+    """
+    temp_all = load_corr_intervals("temperature", date)
+    rh_all = load_corr_intervals("rh", date)
+    indices = intervals_to_indices(rh_all + temp_all)
+    return (
+        indices,
+        _drop_first(temp_all, (FLAG_PURGE,)),
+        _drop_first(rh_all, (FLAG_PURGE, FLAG_RECOVERY)),
+    )
 
 
-def delete_row(df, date):
-    """Remove a date's row from the DataFrame."""
-    date = pd.Timestamp(date).normalize()
-    mask = pd.to_datetime(df["date"]).dt.normalize() == date
-    return df[~mask].copy()
+def _drop_first(intervals, flags):
+    """Drop the first interval carrying each of the given flags."""
+    remaining = set(flags)
+    kept = []
+    for interval in intervals:
+        if interval[2] in remaining:
+            remaining.discard(interval[2])
+            continue
+        kept.append(interval)
+    return kept
+
+
+def month_corr_records(date):
+    """Return the current month's records from both variable files, for display."""
+    records = []
+    for variable in ("temperature", "rh"):
+        path = qc_corrections.monthly_corr_path(CORR_DIR, variable, date)
+        for line_date, start_idx, end_idx, flag in qc_corrections.read_corr_file(path):
+            records.append({
+                "variable": variable,
+                "date": line_date or "",
+                "start_idx": start_idx,
+                "end_idx": end_idx,
+                "flag": flag,
+            })
+    records.sort(key=lambda r: (r["date"], r["variable"], r["start_idx"]))
+    return records
+
+
+def parse_interval_text(text, num_points=None):
+    """Parse a textarea of 'start_idx,end_idx[,flag]' lines into validated tuples."""
+    intervals = []
+    for line_no, raw in enumerate((text or "").splitlines(), start=1):
+        if not raw.split("#", 1)[0].strip():
+            continue
+        parsed = qc_corrections.parse_corr_line(raw)
+        if parsed is None:
+            raise ValueError(f"Line {line_no}: expected start_idx,end_idx[,flag]")
+        _, start_idx, end_idx, flag = parsed
+        if start_idx < 0 or end_idx < 0:
+            raise ValueError(f"Line {line_no}: indices must be >= 0")
+        if start_idx > end_idx:
+            raise ValueError(f"Line {line_no}: start_idx must be <= end_idx")
+        if num_points is not None and end_idx >= num_points:
+            raise ValueError(f"Line {line_no}: end_idx must be <= {num_points - 1}")
+        intervals.append((start_idx, end_idx, flag))
+    return intervals
+
+
+
+def intervals_to_text(intervals):
+    """Format (start_idx, end_idx, flag) tuples as .corr-style lines."""
+    return "\n".join(f"{s},{e},{flag}" for s, e, flag in intervals)
+
+
+def _intervals_to_timestamps(text, store_data):
+    """Convert textarea index intervals into (start_ts, end_ts) pandas Timestamps."""
+    if not store_data or not store_data.get("times"):
+        return []
+    times = pd.to_datetime(store_data["times"])
+    n = len(times)
+    try:
+        intervals = parse_interval_text(text)
+    except ValueError:
+        return []
+    out = []
+    for start_idx, end_idx, _flag in intervals:
+        if start_idx >= n:
+            continue
+        out.append((times[start_idx], times[min(end_idx, n - 1)]))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +383,7 @@ def _idx_to_time(times, idx):
     return None
 
 
-def _build_day_fig(store_data, indices, dragmode="zoom"):
+def _build_day_fig(store_data, indices, dragmode="zoom", bad_temp=None, bad_rh=None):
     """Build the main two-panel figure (temperature + RH) for a day."""
     if store_data is None:
         fig = go.Figure()
@@ -338,6 +406,7 @@ def _build_day_fig(store_data, indices, dragmode="zoom"):
     # --- Temperature ---
     if temp is not None:
         for flag, colour, name, sym in [
+            (0, "steelblue", "Not QC'd (0)", "circle"),
             (1, "steelblue", "Good (1)", "circle"),
             (2, "#888",     "Bad (2)",  "x"),
             (3, "red",      "Purge (3)", "circle"),
@@ -349,13 +418,14 @@ def _build_day_fig(store_data, indices, dragmode="zoom"):
             fig.add_trace(go.Scatter(
                 x=times[mask], y=temp[mask], mode="markers",
                 marker=dict(color=colour, size=3, symbol=sym),
-                name=name, legendgroup=f"t{flag}", showlegend=(flag in (1, 2, 3, 4)),
-                legendgrouptitle_text="Temperature" if flag == 1 else None,
+                name=name, legendgroup=f"t{flag}", showlegend=(flag in (0, 1, 2, 3, 4)),
+                legendgrouptitle_text="Temperature" if flag == 0 else None,
             ), row=1, col=1)
 
     # --- Relative humidity ---
     if rh is not None:
         for flag, colour, name, sym in [
+            (0, "steelblue", "Not QC'd (0)", "circle"),
             (1, "steelblue", "Good (1)", "circle"),
             (2, "#888",     "Bad (2)",  "x"),
             (3, "red",      "Purge (3)", "circle"),
@@ -396,6 +466,12 @@ def _build_day_fig(store_data, indices, dragmode="zoom"):
             fig.add_vline(x=t_val, line_color=colour, line_dash=dash_style,
                           line_width=1.5, row=row, col=1)
 
+    # --- Bad-data intervals pending in the .corr editor ---
+    for row, spans in [(1, bad_temp or []), (2, bad_rh or [])]:
+        for t0, t1 in spans:
+            fig.add_vrect(x0=t0.isoformat(), x1=t1.isoformat(), fillcolor="#555",
+                          opacity=0.22, layer="below", line_width=0, row=row, col=1)
+
     fig.update_yaxes(title_text="Temperature (°C)", row=1, col=1)
     fig.update_yaxes(title_text="Relative humidity (%)", row=2, col=1)
     fig.update_xaxes(title_text="Time (UTC)", row=2, col=1)
@@ -411,7 +487,8 @@ def _build_day_fig(store_data, indices, dragmode="zoom"):
     return fig
 
 
-def _build_zoom_fig(store_data, indices, buffer_minutes=15, dragmode="zoom"):
+def _build_zoom_fig(store_data, indices, buffer_minutes=15, dragmode="zoom",
+                    bad_temp=None, bad_rh=None):
     """Build a zoomed figure around the purge/recovery region."""
     if store_data is None:
         return go.Figure(layout={"title": "No data", "height": 380})
@@ -420,7 +497,8 @@ def _build_zoom_fig(store_data, indices, buffer_minutes=15, dragmode="zoom"):
     p1s = _idx_to_time(times, indices.get("purge1_start_idx"))
     r1e = _idx_to_time(times, indices.get("recovery1_end_idx"))
 
-    fig = _build_day_fig(store_data, indices, dragmode=dragmode)
+    fig = _build_day_fig(store_data, indices, dragmode=dragmode,
+                         bad_temp=bad_temp, bad_rh=bad_rh)
     fig.update_layout(height=380, title="Zoomed — purge/recovery region")
 
     if p1s and r1e:
@@ -441,7 +519,7 @@ def _build_zoom_fig(store_data, indices, buffer_minutes=15, dragmode="zoom"):
 # App layout
 # ---------------------------------------------------------------------------
 
-app = dash.Dash(__name__, title="HMP155 QC — Purge Indices Editor")
+app = dash.Dash(__name__, title="HMP155 QC — .corr Editor")
 
 years = available_years()
 today = datetime.date.today()
@@ -450,7 +528,7 @@ default_year = today.year if today.year in years else (years[-1] if years else t
 app.layout = html.Div(
     [
         html.H2(
-            "HMP155 QC — Purge Indices Editor",
+            "HMP155 QC — Purge, Recovery and Bad Data (.corr)",
             style={"fontFamily": "sans-serif", "margin": "16px 16px 8px"},
         ),
         # ── Top controls ──────────────────────────────────────────────────
@@ -654,9 +732,10 @@ app.layout = html.Div(
                         html.Div(
                             [
                                 html.Button(
-                                    "Save to CSV",
+                                    "Save day (.corr)",
                                     id="save-btn",
                                     n_clicks=0,
+                                    title="Writes purge, recovery and bad-data intervals for this date",
                                     style={
                                         "padding": "8px 18px",
                                         "fontSize": "0.95em",
@@ -670,7 +749,7 @@ app.layout = html.Div(
                                     },
                                 ),
                                 html.Button(
-                                    "Delete row",
+                                    "Delete day",
                                     id="delete-btn",
                                     n_clicks=0,
                                     style={
@@ -777,13 +856,73 @@ app.layout = html.Div(
                             },
                         ),
                         html.Hr(style={"margin": "12px 0"}),
-                        # ── CSV preview table ──────────────────────────────
+                        # ── Bad data (.corr) editor ────────────────────────
                         html.H4(
-                            "CSV rows (year)",
+                            "Other intervals (.corr)",
+                            style={"fontFamily": "sans-serif", "margin": "0 0 4px", "fontSize": "0.95em"},
+                        ),
+                        html.P(
+                            "One interval per line as 'start_idx,end_idx,flag' "
+                            "(2 = bad, 3 = purge, 4 = recovery). Holds bad data plus any "
+                            "extra purge/recovery periods beyond the first. Select a bad-data "
+                            "radio button above and drag on a plot to append.",
+                            style={"fontFamily": "sans-serif", "fontSize": "0.82em", "color": "#555", "margin": "0 0 6px"},
+                        ),
+                        html.Label(
+                            "Temperature",
+                            style={"fontFamily": "sans-serif", "fontSize": "0.85em", "fontWeight": "bold"},
+                        ),
+                        dcc.Textarea(
+                            id="bad-temp-text",
+                            value="",
+                            style={"width": "100%", "height": "70px", "fontFamily": "monospace",
+                                   "fontSize": "0.82em", "marginBottom": "6px"},
+                        ),
+                        html.Label(
+                            "Relative humidity",
+                            style={"fontFamily": "sans-serif", "fontSize": "0.85em", "fontWeight": "bold"},
+                        ),
+                        dcc.Textarea(
+                            id="bad-rh-text",
+                            value="",
+                            style={"width": "100%", "height": "70px", "fontFamily": "monospace",
+                                   "fontSize": "0.82em", "marginBottom": "6px"},
+                        ),
+                        html.Div(
+                            [
+                                html.Button(
+                                    "Clear others",
+                                    id="clear-corr-btn",
+                                    n_clicks=0,
+                                    title="Clear the boxes above (does not save until you press Save day)",
+                                    style={
+                                        "padding": "7px 12px",
+                                        "fontSize": "0.92em",
+                                        "cursor": "pointer",
+                                        "marginBottom": "4px",
+                                    },
+                                ),
+                            ],
+                            style={"display": "flex", "flexWrap": "wrap"},
+                        ),
+                        html.Div(
+                            id="corr-status",
+                            style={
+                                "fontFamily": "sans-serif",
+                                "fontSize": "0.85em",
+                                "minHeight": "18px",
+                                "marginTop": "4px",
+                                "color": "green",
+                            },
+                        ),
+                        html.Hr(style={"margin": "12px 0"}),
+                        # ── .corr preview table ────────────────────────────
+                        html.H4(
+                            ".corr rows (month)",
                             style={"fontFamily": "sans-serif", "margin": "0 0 6px", "fontSize": "0.95em"},
                         ),
                         html.Div(
-                            id="csv-table",
+                            id="corr-table",
                             style={
                                 "fontFamily": "monospace",
                                 "fontSize": "0.8em",
@@ -813,7 +952,7 @@ app.layout = html.Div(
         # ── Stores ────────────────────────────────────────────────────────
         dcc.Store(id="dataset-store"),   # serialised arrays for the loaded day
         dcc.Store(id="indices-store"),   # current working boundary indices
-        dcc.Store(id="csv-store"),       # year's CSV as list-of-dicts
+        dcc.Store(id="corr-store"),      # current month's .corr records
         dcc.Store(id="ncfile-store"),    # path of the loaded NetCDF file
     ],
     style={"maxWidth": "1400px", "margin": "0 auto"},
@@ -876,13 +1015,15 @@ def _auto_adjust_purge(store_data, indices, search_buffer=300, flat_thresh=0.05)
 # ---------------------------------------------------------------------------
 
 
-# 1. Load year CSV whenever the year dropdown changes
+# 1. Load the month's .corr records whenever the date changes
 @callback(
-    Output("csv-store", "data"),
-    Input("year-dropdown", "value"),
+    Output("corr-store", "data"),
+    Input("day-picker", "date"),
 )
-def load_csv_for_year(year):
-    return csv_to_store(year)
+def load_corr_for_month(date_str):
+    if not date_str:
+        return []
+    return month_corr_records(datetime.date.fromisoformat(str(date_str)[:10]))
 
 
 # 2. Navigate prev/next day
@@ -915,22 +1056,22 @@ def navigate_day(prev_n, next_n, current_date):
     Output("idx-purge1_end_idx", "value"),
     Output("idx-recovery1_start_idx", "value"),
     Output("idx-recovery1_end_idx", "value"),
+    Output("bad-temp-text", "value"),
+    Output("bad-rh-text", "value"),
     Input("day-picker", "date"),
-    State("year-dropdown", "value"),
-    State("csv-store", "data"),
 )
-def load_day(date_str, year, csv_records):
+def load_day(date_str):
     if not date_str:
-        return None, None, "No date selected.", None, "", None, None, None, None
+        return None, None, "No date selected.", None, "", None, None, None, None, "", ""
     date = datetime.date.fromisoformat(str(date_str)[:10])
     nc_path = _glob_day_files(TRH_ROOTS, date.year, date.month, date.day)
     ds = load_day_trh(date.year, date.month, date.day)
     store_data = dataset_to_store(ds)
 
-    # Get existing indices from CSV; fall back to inferring from QC flags
-    df = store_to_df(csv_records)
-    indices = get_row_indices(df, date)
-    if all(v is None for v in indices.values()) and store_data is not None:
+    # Take indices from the .corr files; fall back to inferring from QC flags
+    indices, temp_bad, rh_bad = split_day_corr(date)
+    in_corr = not all(v is None for v in indices.values())
+    if not in_corr and store_data is not None:
         indices = infer_indices_from_qc(store_data)
 
     if store_data is None:
@@ -938,8 +1079,7 @@ def load_day(date_str, year, csv_records):
         nc_label = ""
     else:
         n = len(store_data["times"])
-        in_csv = "in CSV" if not all(v is None for v in get_row_indices(df, date).values()) else "not in CSV"
-        status = f"{n} samples — {in_csv}."
+        status = f"{n} samples — {'in .corr' if in_corr else 'not in .corr'}."
         nc_label = nc_path if nc_path else ""
 
     return (
@@ -952,6 +1092,8 @@ def load_day(date_str, year, csv_records):
         indices.get("purge1_end_idx"),
         indices.get("recovery1_start_idx"),
         indices.get("recovery1_end_idx"),
+        intervals_to_text(temp_bad),
+        intervals_to_text(rh_bad),
     )
 
 
@@ -1121,12 +1263,18 @@ def auto_adjust_purge(n_clicks, store_data, indices):
     Input("indices-store", "data"),
     Input("dataset-store", "data"),
     Input("active-boundary", "value"),
+    Input("bad-temp-text", "value"),
+    Input("bad-rh-text", "value"),
 )
-def update_graphs(indices, store_data, active_boundary):
+def update_graphs(indices, store_data, active_boundary, bad_temp_text, bad_rh_text):
     indices = indices or {}
-    dragmode = "select" if active_boundary in ("drag_purge", "drag_recovery") else "zoom"
-    day_fig = _build_day_fig(store_data, indices, dragmode=dragmode)
-    zoom_fig = _build_zoom_fig(store_data, indices, dragmode=dragmode)
+    dragmode = "select" if str(active_boundary).startswith("drag_") else "zoom"
+    bad_temp = _intervals_to_timestamps(bad_temp_text, store_data)
+    bad_rh = _intervals_to_timestamps(bad_rh_text, store_data)
+    day_fig = _build_day_fig(store_data, indices, dragmode=dragmode,
+                             bad_temp=bad_temp, bad_rh=bad_rh)
+    zoom_fig = _build_zoom_fig(store_data, indices, dragmode=dragmode,
+                               bad_temp=bad_temp, bad_rh=bad_rh)
     return day_fig, zoom_fig
 
 
@@ -1187,9 +1335,72 @@ def handle_drag_select(day_selected, zoom_selected, active_boundary, store_data,
     )
 
 
+# 7b-ii. Handle drag-box selection to append a bad-data interval
+@callback(
+    Output("bad-temp-text", "value", allow_duplicate=True),
+    Output("bad-rh-text", "value", allow_duplicate=True),
+    Input("day-graph", "selectedData"),
+    Input("zoom-graph", "selectedData"),
+    State("active-boundary", "value"),
+    State("dataset-store", "data"),
+    State("bad-temp-text", "value"),
+    State("bad-rh-text", "value"),
+    prevent_initial_call=True,
+)
+def handle_bad_drag(day_selected, zoom_selected, active_boundary, store_data,
+                    temp_text, rh_text):
+    no_change = (dash.no_update, dash.no_update)
+    if active_boundary not in ("drag_bad_temp", "drag_bad_rh", "drag_bad_both"):
+        return no_change
+    selected_data = day_selected if ctx.triggered_id == "day-graph" else zoom_selected
+    if not selected_data or not store_data or not store_data.get("times"):
+        return no_change
+
+    range_data = selected_data.get("range") or {}
+    x_keys = sorted(k for k in range_data if re.match(r"^x\d*$", k))
+    if not x_keys:
+        return no_change
+    x_range = range_data[x_keys[0]]
+    if len(x_range) < 2:
+        return no_change
+
+    times = pd.to_datetime(store_data["times"])
+    ts0, ts1 = sorted([pd.Timestamp(str(x_range[0])), pd.Timestamp(str(x_range[1]))])
+    # Snap to the nearest actual samples so the interval covers real data
+    i0 = int(np.argmin(np.abs((times - ts0).total_seconds().values)))
+    i1 = int(np.argmin(np.abs((times - ts1).total_seconds().values)))
+    if i1 < i0:
+        i0, i1 = i1, i0
+    line = f"{i0},{i1},2"
+
+    def _append(text):
+        text = (text or "").rstrip()
+        return f"{text}\n{line}" if text else line
+
+    if active_boundary == "drag_bad_temp":
+        return _append(temp_text), dash.no_update
+    if active_boundary == "drag_bad_rh":
+        return dash.no_update, _append(rh_text)
+    return _append(temp_text), _append(rh_text)
+
+
+# 7b-iii. Clear the extra-interval boxes for the day
+@callback(
+    Output("corr-status", "children"),
+    Output("corr-status", "style"),
+    Output("bad-temp-text", "value", allow_duplicate=True),
+    Output("bad-rh-text", "value", allow_duplicate=True),
+    Input("clear-corr-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def clear_bad_data(n_clicks):
+    ok_style = {"color": "green", "fontFamily": "sans-serif", "fontSize": "0.85em", "minHeight": "18px"}
+    return "Cleared (press Save day to write).", ok_style, "", ""
+
+
 # 7c. Apply current indices to a date range with optional drift
 @callback(
-    Output("csv-store", "data", allow_duplicate=True),
+    Output("corr-store", "data", allow_duplicate=True),
     Output("range-status", "children"),
     Output("range-status", "style"),
     Input("apply-range-btn", "n_clicks"),
@@ -1197,13 +1408,11 @@ def handle_drag_select(day_selected, zoom_selected, active_boundary, store_data,
     State("range-end", "value"),
     State("range-drift", "value"),
     State("day-picker", "date"),
-    State("year-dropdown", "value"),
     State("indices-store", "data"),
-    State("csv-store", "data"),
     prevent_initial_call=True,
 )
 def apply_to_range(n_clicks, range_start, range_end, drift_per_day,
-                   ref_date_str, year, indices, csv_records):
+                   ref_date_str, indices):
     err_style = {"color": "#c0392b", "fontFamily": "sans-serif", "fontSize": "0.88em", "minHeight": "18px"}
     ok_style  = {"color": "green",   "fontFamily": "sans-serif", "fontSize": "0.88em", "minHeight": "18px"}
 
@@ -1222,100 +1431,90 @@ def apply_to_range(n_clicks, range_start, range_end, drift_per_day,
     ref_date = datetime.date.fromisoformat(str(ref_date_str)[:10])
     drift = float(drift_per_day or 0)
 
-    df = store_to_df(csv_records)
     count = 0
     d = d_start
     while d <= d_end:
-        offset = (d - ref_date).days
-        shift = round(offset * drift)
-        new_indices = {}
-        for k in INDEX_KEYS:
-            v = indices.get(k)
-            if v is not None:
-                new_indices[k] = max(0, int(v) + shift)
-            else:
-                new_indices[k] = None
-        df = upsert_row(df, d, new_indices)
+        shift = round((d - ref_date).days * drift)
+        shifted = {
+            k: (max(0, int(v) + shift) if v is not None else None)
+            for k, v in ((k, indices.get(k)) for k in INDEX_KEYS)
+        }
+        # Existing bad-data intervals for each date are left untouched
+        _, temp_bad, rh_bad = split_day_corr(d)
+        save_day_corr(d, shifted, temp_bad, rh_bad)
         count += 1
         d += datetime.timedelta(days=1)
 
-    save_purge_csv(year, df)
-    new_records = csv_to_store(year)
-    return new_records, f"Applied to {count} date(s).", ok_style
+    return month_corr_records(ref_date), f"Applied to {count} date(s).", ok_style
 
 
-# 8. Save or delete CSV row
+# 8. Save or delete the day's .corr entries
 @callback(
-    Output("csv-store", "data", allow_duplicate=True),
+    Output("corr-store", "data", allow_duplicate=True),
     Output("save-status", "children"),
     Output("save-status", "style"),
     Input("save-btn", "n_clicks"),
     Input("delete-btn", "n_clicks"),
     State("day-picker", "date"),
-    State("year-dropdown", "value"),
     State("indices-store", "data"),
-    State("csv-store", "data"),
+    State("bad-temp-text", "value"),
+    State("bad-rh-text", "value"),
+    State("dataset-store", "data"),
     prevent_initial_call=True,
 )
-def save_or_delete(save_n, delete_n, date_str, year, indices, csv_records):
+def save_or_delete(save_n, delete_n, date_str, indices, temp_text, rh_text, store_data):
+    err_style = {"color": "#c0392b"}
     if not date_str:
-        return dash.no_update, "No date selected.", {"color": "red"}
-
-    df = store_to_df(csv_records)
+        return dash.no_update, "No date selected.", err_style
+    date = datetime.date.fromisoformat(str(date_str)[:10])
 
     if ctx.triggered_id == "delete-btn":
-        df = delete_row(df, date_str)
-        save_purge_csv(year, df)
-        new_records = csv_to_store(year)
-        return new_records, f"Deleted row for {date_str}.", {"color": "#c0392b"}
+        save_day_corr(date, {}, [], [])
+        return month_corr_records(date), f"Deleted entries for {date_str}.", err_style
 
-    # Save
-    if not indices:
-        return dash.no_update, "No indices to save.", {"color": "#c0392b"}
-    df = upsert_row(df, date_str, indices)
-    save_purge_csv(year, df)
-    new_records = csv_to_store(year)
-    return new_records, f"Saved {date_str}.", {"color": "green"}
+    num_points = len(store_data["times"]) if store_data and store_data.get("times") else None
+    try:
+        temp_bad = parse_interval_text(temp_text, num_points)
+        rh_bad = parse_interval_text(rh_text, num_points)
+    except ValueError as e:
+        return dash.no_update, str(e), err_style
+
+    try:
+        save_day_corr(date, indices, temp_bad, rh_bad)
+    except OSError as e:
+        return dash.no_update, f"Write failed: {e}", err_style
+
+    return month_corr_records(date), f"Saved {date_str}.", {"color": "green"}
 
 
-# 9. Render the CSV table in the sidebar
+# 9. Render the .corr table in the sidebar
 @callback(
-    Output("csv-table", "children"),
-    Input("csv-store", "data"),
+    Output("corr-table", "children"),
+    Input("corr-store", "data"),
     State("day-picker", "date"),
 )
-def render_csv_table(records, current_date):
+def render_corr_table(records, current_date):
     if not records:
         return html.Span("(empty)", style={"color": "#999"})
 
-    df = pd.DataFrame(records)
-    if df.empty:
-        return html.Span("(empty)", style={"color": "#999"})
-
-    cur_date = str(current_date)[:10] if current_date else None
+    cur_date = str(current_date)[:10].replace("-", "") if current_date else None
     rows = []
-    for _, row in df.iterrows():
-        date_val = str(row.get("date", ""))[:10]
-        is_current = date_val == cur_date
+    for row in records:
+        is_current = str(row.get("date", "")) == cur_date
         row_style = {
             "backgroundColor": "#d6eaff" if is_current else "transparent",
             "padding": "1px 4px",
             "whiteSpace": "nowrap",
         }
-        cols = []
-        for col in ["date", "purge1_start_idx", "purge1_end_idx",
-                    "recovery1_start_idx", "recovery1_end_idx"]:
-            v = row.get(col, "")
-            try:
-                v_str = str(int(float(v))) if col != "date" and str(v) not in ("", "nan") else str(v)[:10]
-            except (ValueError, TypeError):
-                v_str = str(v)[:10]
-            cols.append(html.Td(v_str, style={"paddingRight": "8px"}))
+        cols = [
+            html.Td(str(row.get(col, "")), style={"paddingRight": "8px"})
+            for col in ["date", "variable", "start_idx", "end_idx", "flag"]
+        ]
         rows.append(html.Tr(cols, style=row_style))
 
     header = html.Tr([
         html.Th(c, style={"paddingRight": "8px", "borderBottom": "1px solid #ccc"})
-        for c in ["Date", "P-start", "P-end", "R-start", "R-end"]
+        for c in ["Date", "Var", "Start", "End", "Flag"]
     ])
     return html.Table(
         [html.Thead(header), html.Tbody(rows)],
@@ -1329,7 +1528,7 @@ def render_csv_table(records, current_date):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="HMP155 QC — Purge Indices Editor (Dash web app)",
+        description="HMP155 QC — .corr correction file editor (Dash web app)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -1340,7 +1539,7 @@ Examples:
   python qc_app.py --port 8052
 
   # Override data root:
-  python qc_app.py --data-root /path/to/level1d --csv-dir /path/to/csvs
+  python qc_app.py --data-root /path/to/level1d --corr-dir /path/to/corrections
 
 SSH local port forwarding (run on your local machine):
   ssh -L 8051:localhost:8051 <username>@<jasmin-login-host>
@@ -1364,19 +1563,20 @@ Then open http://localhost:8051 in your browser.
         help="Override the NetCDF level1d root directory (also settable via TRH_DATA_ROOT env var)",
     )
     parser.add_argument(
-        "--csv-dir",
+        "--corr-dir",
         default=None,
-        help="Directory containing purge_indices_YYYY.csv files (also settable via PURGE_CSV_DIR env var)",
+        help="Base of the .corr corrections tree, <base>/<variable>/YYYY/YYYYMM.corr "
+             "(also settable via TRH_CORR_DIR env var)",
     )
     args = parser.parse_args()
 
     if args.data_root:
         TRH_ROOTS[0] = (args.data_root, TRH_ROOTS[0][1])
-    if args.csv_dir:
-        CSV_DIR = args.csv_dir
+    if args.corr_dir:
+        CORR_DIR = args.corr_dir
 
     print(f"NetCDF root : {TRH_ROOTS[0][0]}")
-    print(f"CSV dir     : {CSV_DIR}")
+    print(f"Corr dir    : {CORR_DIR}")
     print(f"Serving on  : http://{args.host}:{args.port}")
     print()
     print("SSH tunnel (run on your local machine):")

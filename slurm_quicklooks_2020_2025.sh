@@ -9,7 +9,7 @@
 #SBATCH --output=logs/hmp155_quicklooks_%A_%a.out
 #SBATCH --error=logs/hmp155_quicklooks_%A_%a.err
 #SBATCH --array=2024-2025
-#SBATCH --account=ncas_radar
+#SBATCH --account=chil_atmos
 #SBATCH --qos=standard
 
 # Generate quicklook plots for HMP155 data from 2020-2025

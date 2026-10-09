@@ -38,6 +38,12 @@ def plot_day(ds, nc_filename, outdir):
     if ds.time.size == 0:
         print(f"Skipping {nc_filename}: no data")
         return
+
+    # Create dummy zero QC flags if not present in the file
+    if 'qc_flag_air_temperature' not in ds:
+        ds = ds.assign({'qc_flag_air_temperature': xr.zeros_like(ds['air_temperature'], dtype=int)})
+    if 'qc_flag_relative_humidity' not in ds:
+        ds = ds.assign({'qc_flag_relative_humidity': xr.zeros_like(ds['relative_humidity'], dtype=int)})
     
     try:
         date_str = [s for s in nc_filename.split('_') if s.isdigit() and len(s) == 8][0]

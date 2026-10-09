@@ -9,7 +9,7 @@
 #SBATCH --output=logs/hmp155_f5_2015-2020_%j.out
 #SBATCH --error=logs/hmp155_f5_2015-2020_%j.err
 #SBATCH --array=2015-2020
-#SBATCH --account=ncas_radar
+#SBATCH --account=chil_atmos
 #SBATCH --qos=standard
 
 # Process HMP155 data from 2015-2020 using Format5 version

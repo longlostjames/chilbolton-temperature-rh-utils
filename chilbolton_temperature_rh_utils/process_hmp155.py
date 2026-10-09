@@ -208,7 +208,17 @@ def process_file(infile, outdir="./", metadata_file="metadata.json", aws_7_file=
     nant.util.update_variable(nc, "air_temperature", df["Air_T_Avg"])
     nant.util.update_variable(nc, "relative_humidity", df["RH_Avg"])
 
-
+    # Initialise QC flags to 0 (not yet assessed); create variables if not in template
+    for _qc_var_name in ("qc_flag_air_temperature", "qc_flag_relative_humidity"):
+        if _qc_var_name not in nc.variables:
+            _qc_var = nc.createVariable(_qc_var_name, "i1", ("time",))
+            _qc_var.setncattr("long_name", f"Data Quality Flag: {_qc_var_name.replace('qc_flag_', '').replace('_', ' ')}")
+            _qc_var.setncattr("units", "1")
+            _qc_var.setncattr("flag_values", np.array([0, 1, 2, 3, 4], dtype=np.int8))
+            _qc_var.setncattr("flag_meanings", "not_used good_data bad_data_do_not_use suspect_data recovery")
+            _qc_var[:] = 0
+        else:
+            nc.variables[_qc_var_name][:] = 0
 
     # Add time_coverage_start and time_coverage_end metadata using data from get_times
     nc.setncattr(
@@ -262,42 +272,6 @@ def none_or_str(value):
     if value == 'None':
         return None
     return value
-
-
-def read_bad_intervals(corr_file):
-    bad_intervals = []
-    with open(corr_file, "r") as f:
-        for line in f:
-            parts = line.strip().split()
-            if len(parts) == 4 and parts[-1] == "BADDATA":
-                date = parts[0]
-                start = parts[1]
-                end = parts[2]
-                # Build datetime objects for start and end
-                start_dt = datetime.strptime(date + start, "%Y%m%d%H%M%S")
-                end_dt = datetime.strptime(date + end, "%Y%m%d%H%M%S")
-                bad_intervals.append((start_dt, end_dt))
-    return bad_intervals
-
-def flag_bad_data(df, bad_intervals, flag_column):
-    timestamps = df["TIMESTAMP"].to_numpy()
-    mask = np.zeros(len(timestamps), dtype=bool)
-    for start, end in bad_intervals:
-        mask |= (timestamps >= start) & (timestamps <= end)
-    # Add the mask as a Boolean column
-    df = df.with_columns(pl.Series("bad_mask", mask))
-    # Now update the flag column in Polars
-    if flag_column in df.columns:
-        df = df.with_columns(
-            pl.when(pl.col("bad_mask")).then(2).otherwise(pl.col(flag_column)).alias(flag_column)
-        )
-    else:
-        df = df.with_columns(
-            pl.when(pl.col("bad_mask")).then(2).otherwise(0).alias(flag_column)
-        )
-    # Remove the temporary mask column
-    df = df.drop("bad_mask")
-    return df
 
 
 if __name__ == "__main__":

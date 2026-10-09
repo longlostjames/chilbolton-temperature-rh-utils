@@ -74,6 +74,12 @@ extract-hmp155-purge-indices = "chilbolton_temperature_rh_utils.extract_purge_in
 apply-hmp155-purge-indices = "chilbolton_temperature_rh_utils.apply_purge_indices:main"
 extract-hmp155-bad-data-indices = "chilbolton_temperature_rh_utils.extract_bad_data_indices:main"
 apply-hmp155-bad-data-indices = "chilbolton_temperature_rh_utils.apply_bad_data_indices:main"
+apply-hmp155-corr-files = "chilbolton_temperature_rh_utils.apply_corr_files:main"
+migrate-hmp155-csv-to-corr = "chilbolton_temperature_rh_utils.migrate_csv_to_corr:main"
+train-hmp155-unet = "chilbolton_temperature_rh_utils.ml.train:main"
+predict-hmp155-unet = "chilbolton_temperature_rh_utils.ml.predict:main"
+update-stfc-source = "chilbolton_temperature_rh_utils.update_stfc_source:main"
+update-stfc-time-units = "chilbolton_temperature_rh_utils.update_stfc_time_units:main"
 
 [tool.setuptools]
 packages = ["chilbolton_temperature_rh_utils"]

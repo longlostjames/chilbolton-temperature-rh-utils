@@ -5,7 +5,6 @@
 import pandas as pd
 from pathlib import Path
 import argparse
-import filecmp
 import csv
 
 try:
@@ -13,18 +12,46 @@ try:
 except ImportError:
     __version__ = "unknown"
 
-def split_file(input_file, output_dir, delimiter, timestamp_column, start_date=None, end_date=None, verbose=False):
-    # === READ THE FIRST 4 HEADER LINES (TOA5 METADATA) ===
+def count_daily_data_rows(file_path):
+    """Count data rows in a split daily file (excluding the 4-line TOA5 header)."""
+    with open(file_path, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in f)
+    return max(line_count - 4, 0)
+
+
+def split_file(input_file, output_dir, delimiter, timestamp_column, output_prefix, verbose=False):
+    # === LOCATE TOA5 HEADER BLOCK ROBUSTLY ===
     with open(input_file, 'r', encoding='utf-8') as f:
-        header_lines = [next(f) for _ in range(4)]
+        all_lines = f.readlines()
+
+    toa5_start = None
+    for idx, line in enumerate(all_lines):
+        first_token = line.split(delimiter, 1)[0].strip().strip('"').upper()
+        if first_token == 'TOA5':
+            toa5_start = idx
+            break
+
+    if toa5_start is None or len(all_lines) < toa5_start + 4:
+        print(f"ERROR: Could not find a valid 4-line TOA5 header block in {input_file}")
+        return
+
+    header_lines = all_lines[toa5_start:toa5_start + 4]
+
+    # Parse column names from the second TOA5 header line.
+    column_names = [
+        c.strip().strip('"')
+        for c in next(csv.reader([header_lines[1]], delimiter=delimiter, quotechar='"'))
+    ]
 
     # === LOAD DATAFRAME ===
     df = pd.read_csv(
         input_file,
-        skiprows=1,           # Only skip the first metadata line
+        skiprows=toa5_start + 4,
         delimiter=delimiter,
         quotechar='"',
-        low_memory=False
+        low_memory=False,
+        header=None,
+        names=column_names
     )
     df.columns = df.columns.str.strip().str.replace('"', '')
 
@@ -36,12 +63,6 @@ def split_file(input_file, output_dir, delimiter, timestamp_column, start_date=N
     df[timestamp_column] = pd.to_datetime(df[timestamp_column], format='%Y-%m-%d %H:%M:%S', errors='coerce')
     df = df.dropna(subset=[timestamp_column])
 
-    # === FILTER BY DATE RANGE ===
-    if start_date is not None:
-        df = df[df[timestamp_column] >= pd.Timestamp(start_date)]
-    if end_date is not None:
-        df = df[df[timestamp_column] < pd.Timestamp(end_date) + pd.Timedelta(days=1)]
-
     # === SHIFT MIDNIGHT TO PREVIOUS DAY ===
     timestamps = df[timestamp_column]
     adjusted_dates = timestamps.dt.date.where(
@@ -51,7 +72,6 @@ def split_file(input_file, output_dir, delimiter, timestamp_column, start_date=N
     df['group_date'] = adjusted_dates
 
     # === WRITE DAILY FILES WITH HEADER IN YYYY/YYYYMM SUBDIRS ===
-    input_base = Path(input_file).stem
     for date, group in df.groupby('group_date'):
         date_obj = pd.to_datetime(date)
         year_str = date_obj.strftime('%Y')
@@ -59,7 +79,23 @@ def split_file(input_file, output_dir, delimiter, timestamp_column, start_date=N
         ymd_str = date_obj.strftime('%Y%m%d')
         out_subdir = Path(output_dir) / year_str / ym_str
         out_subdir.mkdir(parents=True, exist_ok=True)
-        out_file = out_subdir / f"{input_base}_{ymd_str}.dat"
+        out_file = out_subdir / f"{output_prefix}_{ymd_str}.dat"
+
+        candidate_rows = len(group)
+        if out_file.exists():
+            existing_rows = count_daily_data_rows(out_file)
+            if candidate_rows <= existing_rows:
+                if verbose:
+                    print(
+                        f"Skipping {out_file}: existing file has {existing_rows} rows; "
+                        f"candidate from {Path(input_file).name} has {candidate_rows} rows."
+                    )
+                continue
+            if verbose:
+                print(
+                    f"Replacing {out_file}: existing file has {existing_rows} rows; "
+                    f"candidate from {Path(input_file).name} has {candidate_rows} rows."
+                )
 
         # Convert timestamp column to string (no extra quotes)
         group = group.copy()
@@ -78,47 +114,15 @@ def split_file(input_file, output_dir, delimiter, timestamp_column, start_date=N
         if verbose:
             print(f"Saved: {out_file}")
 
-def deduplicate_daily_files(output_dir, verbose=False):
-    # Walk through all YYYY/YYYYMM subdirs
-    for year_dir in Path(output_dir).glob("*"):
-        if not year_dir.is_dir():
-            continue
-        for month_dir in year_dir.glob("*"):
-            if not month_dir.is_dir():
-                continue
-            # Group files by date
-            files_by_date = {}
-            for file in month_dir.glob("*.dat"):
-                # Extract date string from filename (last 8 digits before .dat)
-                parts = file.stem.split('_')
-                if len(parts) < 2:
-                    continue
-                date_str = parts[-1]
-                files_by_date.setdefault(date_str, []).append(file)
-            # For each date, compare files and keep only one if identical
-            for date_str, files in files_by_date.items():
-                if len(files) <= 1:
-                    continue
-                # Compare all files for this date
-                keep = files[0]
-                for f in files[1:]:
-                    if filecmp.cmp(keep, f, shallow=False):
-                        if verbose:
-                            print(f"Duplicate found for {date_str}: {f} is identical to {keep}, removing {f}")
-                        f.unlink()
-                    else:
-                        print(f"WARNING: {f} and {keep} for {date_str} differ, keeping both.")
-
 def main():
     """CLI entry point for split-cr1000x-data-daily command."""
-    parser = argparse.ArgumentParser(description="Split all CR1000X_Chilbolton_Rxcabinmet1*.dat files in a directory into daily files in YYYY/YYYYMM subdirectories, deduplicating identical daily files.")
+    parser = argparse.ArgumentParser(description="Split CR1000X_Chilbolton_Rxcabinmet1*.dat files into daily files in YYYY/YYYYMM subdirectories, keeping the most complete daily file where overlaps exist.")
     parser.add_argument("-i", "--input_dir", required=True, help="Directory containing CR1000X_Chilbolton_Rxcabinmet1*.dat files")
     parser.add_argument("-o", "--output_dir", default="daily_files", help="Directory to write daily files (default: daily_files)")
     parser.add_argument("-d", "--delimiter", default=",", help="Delimiter for input file (default: ',')")
     parser.add_argument("-t", "--timestamp_column", default="TIMESTAMP", help="Name of timestamp column (default: TIMESTAMP)")
+    parser.add_argument("-p", "--output_prefix", default="CR1000XSeries_Chilbolton_Rxcabinmet1", help="Output filename prefix for daily files (default: CR1000XSeries_Chilbolton_Rxcabinmet1)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
-    parser.add_argument("--start-date", default=None, help="Only process data on or after this date (YYYY-MM-DD)")
-    parser.add_argument("--end-date", default=None, help="Only process data on or before this date (YYYY-MM-DD)")
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -127,14 +131,21 @@ def main():
     print(f"Input directory: {input_dir}")
     print(f"Output directory: {output_dir}")
 
-    # Process all matching files
-    for input_file in sorted(input_dir.glob("CR1000XSeries_Chilbolton_Rxcabinmet1*.dat")):
-        print(f"Processing {input_file}")
-        split_file(str(input_file), output_dir, args.delimiter, args.timestamp_column,
-                   start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
+    # Process both CR1000X naming variants with case-insensitive matching
+    # so files like RXcabinmet1 and Rxcabinmet1 are both included.
+    input_files = {
+        path for path in input_dir.glob("*.dat")
+        if path.name.lower().startswith("cr1000x_chilbolton_rxcabinmet1")
+        or path.name.lower().startswith("cr1000xseries_chilbolton_rxcabinmet1")
+    }
 
-    # Deduplicate daily files
-    deduplicate_daily_files(output_dir, args.verbose)
+    if not input_files:
+        print("No matching CR1000X cabin met files found in input directory.")
+        return
+
+    for input_file in sorted(input_files):
+        print(f"Processing {input_file}")
+        split_file(str(input_file), output_dir, args.delimiter, args.timestamp_column, args.output_prefix, args.verbose)
 
 
 if __name__ == "__main__":
